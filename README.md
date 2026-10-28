@@ -22,6 +22,7 @@ Have fun!
 
 | Script | Purpose | Documentation |
 |---------|---------|---------------|
+| **Debian LXC Creation Wizard** | Create a Debian LXC through step-by-step settings, package selection, and optional device passthrough (initial test build). | [View Guide](docs/proxmox-debian-lxc-create.md) |
 | **Proxmox Task Scheduler** | Create and manage scheduled maintenance tasks using interactive menus. | [View Guide](docs/proxmox-task-scheduler.md) |
 | **Proxmox Health Check** | Perform a comprehensive read-only health assessment of a Proxmox host, including storage, SMART health, package updates, networking, DNS, system services, and an overall health summary. | [View Guide](docs/proxmox-health-check.md) |
 | **Proxmox Host & LXC Maintenance Wizard** | Safely perform guided maintenance on the Proxmox host or Debian/Ubuntu LXC containers with maintenance profiles, progress tracking, automatic logging, and detailed summaries. | [View Guide](docs/proxmox-lxc-maintenance-wizard.md) |
@@ -54,6 +55,19 @@ git clone https://github.com/SweenLab/personal-proxmox-scripts.git
 ```
 
 Or run a script directly from GitHub.
+
+## Debian LXC Creation Wizard (initial test build)
+
+Keep both new scripts in the same directory. Review them before running on a Proxmox host:
+
+```bash
+cd personal-proxmox-scripts
+less scripts/proxmox-debian-lxc-create.sh
+less scripts/sweenlab-debian-tools.sh
+bash scripts/proxmox-debian-lxc-create.sh
+```
+
+The wizard asks each setting in sequence; no packages are preselected. See the [step-by-step guide](docs/proxmox-debian-lxc-create.md) for Docker, Tailscale, GPU/TUN passthrough, and current testing limitations. Run the creation wizard on the host; the companion installer runs inside the new CT only.
 
 ## Proxmox Health Check
 
@@ -114,6 +128,7 @@ Use those systems' web interfaces and official update guides instead.
 
 Detailed documentation is available in the **docs** directory.
 
+- 📖 [Debian LXC Creation Wizard](docs/proxmox-debian-lxc-create.md)
 - 📖 [Proxmox Task Scheduler](docs/proxmox-task-scheduler.md)
 - 📖 [Proxmox Health Check](docs/proxmox-health-check.md)
 - 📖 [Proxmox Host & LXC Maintenance Wizard](docs/proxmox-lxc-maintenance-wizard.md)
