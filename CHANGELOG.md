@@ -2,6 +2,14 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.13 — 2026-10-28
+
+- Container and template storage now use explicit single-choice selectors with visible ( ) / (x) markers. Moving the highlight does not select an option.
+- Space or Enter selects the highlighted storage; Next cannot continue without a selection. Back preserves a previously accepted choice.
+- Updated README, guide and immutable launcher.
+
+Validation: all 40 local tests and Bash syntax pass. Tests cover hard-stop behavior, exclusive selection and Back navigation. Real curses storage selection passes at 93×24, alongside existing password/review smoke checks. Live provisioning has not been repeated for this UI change.
+
 ## Debian LXC Wizard 0.1.12 — 2026-10-28
 
 - Added a persistent centered grey input box to text and password screens. Empty fields remain visible, including when focus moves to buttons.

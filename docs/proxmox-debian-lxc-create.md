@@ -1,16 +1,16 @@
 # SweenLab Debian LXC Creation Wizard
 
-Version 0.1.12 (initial test build). One self-contained script, fully step by step, with Back navigation and a final Create/Abort review. Live Proxmox testing is still required.
+Version 0.1.13 (initial test build). One self-contained script, fully step by step, with Back navigation and a final Create/Abort review. Live Proxmox testing is still required.
 
 ## Quick Start: copy and paste
 
 Use the copy button in the top-right corner of this block, then paste into your **Proxmox node shell as root**:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/fcdc435763989b38fac1ed2d3954e14c190db130/scripts/proxmox-debian-lxc-create.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/f7de850cdfc306b2a4b18c931611a57ef872a3ff/scripts/proxmox-debian-lxc-create.sh)"
 ```
 
-The command is pinned to the verified version 0.1.12 script to avoid stale raw GitHub main-branch downloads. No clone, companion file, or additional shell-script download is needed.
+The command is pinned to the verified version 0.1.13 script to avoid stale raw GitHub main-branch downloads. No clone, companion file, or additional shell-script download is needed.
 
 If an older wizard is still open, abort it and restart with this command. Use a new disposable CT ID for the first test. Do not reuse an ID left by a failed creation until its state has been inspected.
 
@@ -41,10 +41,10 @@ The UI centers prompts, fields and choices, with required prompts and choices in
 
 1. **Container details:** unused cluster-wide ID, blank required hostname, and optional tags separated by semicolons. Tags are case-sensitive: `TEST` and `test` are different. Match the exact capitalization of predefined Proxmox tags.
 2. **Networking:** choose an active configured Proxmox Linux bridge. Choices show only names such as `vmbr0` and `vmbr1`; Docker and temporary firewall bridges are hidden. Choose IPv4/IPv6 mode (switching to static starts with a blank address field), and addresses/gateways where relevant. Untagged networking, MTU 1500, an automatically generated MAC, no rate limit, and inherited host DNS/search settings are applied in the background.
-3. **Resources:** CPU cores, memory in MiB, root disk size in GiB (initially 10), and container storage. Storage choices show names only.
+3. **Resources:** CPU cores, memory in MiB, root disk size in GiB (initially 10), and container storage. Storage uses a single-choice selector showing `( )` and `(x)` markers alongside names. Highlight with arrows, select with Space or Enter, then move to Next. Next is blocked until a choice is explicitly selected; the first row is not automatically selected. Back preserves your accepted selection.
 4. **Timezone and locale:** The guest locale is prefilled from the host configuration: `/etc/locale.conf`, then `/etc/default/locale`. Supported UTF-8 names are normalized; if no supported setting is found, `C.UTF-8` is used. SSH client locale variables are not used. You can edit the choice; it is generated where needed, written as the guest default and verified before the full upgrade. Timezone is automatically prefilled from the Proxmox host's timezone; edit if needed. If the host timezone cannot be resolved, UTC is shown.
 5. **Access:** unprivileged mode is initially Yes. Choose an optional host SSH public-key file. Enter and confirm a mandatory root console password. Passwords remain hidden and are never logged or included in command arguments. Setting a console password does not enable root password login over SSH.
-6. **Downloaded templates:** select template storage, then one of the Debian templates already downloaded there. There is no catalog refresh, separate Debian-release chooser, or automatic template download. If the selected storage has none, Back selects another storage; Abort lets you download a template in Proxmox first.
+6. **Downloaded templates:** explicitly select template storage with the same required single-choice selector, then one of the Debian templates already downloaded there. There is no catalog refresh, separate Debian-release chooser, or automatic template download. If the selected storage has none, Back selects another storage; Abort lets you download a template in Proxmox first.
 7. **Packages:** git, curl, wget, Tailscale, Docker Engine/Buildx, Docker Compose (includes Engine), nano, jq, unzip, ping, OpenSSH server, sudo, and Python 3 (with pip and venv). Packages are initially unselected. You must choose at least one package or explicitly select **None**. None clears and excludes individual packages until deselected. Select all / clear all toggles every package and clears None; Clear all alone cannot continue. None still installs the base locale/timezone support and runs the full upgrade. htop, vim-tiny, tmux, rsync, and dnsutils are no longer choices.
 8. **Tailscale:** when selected, choose whether to start sign-in automatically and configure its options (details below).
 9. **Features:** nesting, keyctl for unprivileged containers, FUSE, and TUN use horizontal Yes/No controls. Nesting, keyctl and TUN start at Yes; FUSE starts at No because most installs do not need it and it can complicate freezing/backups. Docker requires nesting and keyctl in unprivileged mode; Tailscale requires TUN. Invalid combinations cannot continue.
@@ -111,7 +111,7 @@ tar: /var/lib/lxc/204/rootfs: Cannot open: Permission denied
 
 occurs inside Proxmox's template extraction, before guest setup. The wizard through version 0.1.4 passed its private-file `umask 077` to Proxmox. Proxmox's directory creation respects that mask, producing `0700` CT directories that mapped container root (host UID 100000) cannot traverse. This matches the reported root-owned `0700` directories.
 
-Version 0.1.12 runs Proxmox container commands in a subshell with `umask 022`, while logs and UI files retain their private mask. A regression test reproduces the old `0700` behavior with Perl's `File::Path::make_path` and verifies the corrected `0755` directories, private `0600` log files, and command status preservation. This has not yet been validated by creating a container on a live Proxmox host.
+Version 0.1.13 runs Proxmox container commands in a subshell with `umask 022`, while logs and UI files retain their private mask. A regression test reproduces the old `0700` behavior with Perl's `File::Path::make_path` and verifies the corrected `0755` directories, private `0600` log files, and command status preservation. This has not yet been validated by creating a container on a live Proxmox host.
 
 Choose a fresh unused CT ID for the next test. The wizard validates the ID format and checks that no VM or CT uses it through Proxmox. Leftover directories alone do not block selection or trigger a separate pre-creation rejection; Proxmox handles creation errors. Existing failed directories and disks are left untouched for separate inspection. The read-only mapped-root traversal preflight remains in place.
 
@@ -151,7 +151,7 @@ That retry example applies only after the CT has been created and the installer 
 
 ## Validation and release history
 
-Local checks cover bridge filtering, cached-template filtering through the real configuration flow, required hostname/passwords, Back preserving values, abort-before-mutation, hidden defaults, Tailscale flags/auth-output isolation, namespace preflight failure, creation diagnostics, and installer-failure preservation. UI rendering/key-handling tests cover the button layouts, defaults, masking, selections, and navigation. All 38 local checks pass for this release. Real curses pseudo-terminal smoke checks cover blank password submission at 80×24 and 93×24, plus review rendering at 93×24, with the orange/green color sequences verified. Checklist tests cover successful installation and incomplete Tailscale authentication.
+Local checks cover bridge filtering, cached-template filtering through the real configuration flow, required hostname/passwords, Back preserving values, abort-before-mutation, hidden defaults, Tailscale flags/auth-output isolation, namespace preflight failure, creation diagnostics, and installer-failure preservation. UI rendering/key-handling tests cover the button layouts, defaults, masking, selections, and navigation. All 40 local checks pass for this release. Real curses pseudo-terminal smoke checks cover blank password submission at 80×24 and 93×24, plus review rendering at 93×24, with the orange/green color sequences verified. Checklist tests cover successful installation and incomplete Tailscale authentication.
 
 These are simulated/terminal checks, not a successful live Proxmox installation. Live extraction, packages, Docker workloads, Tailscale login, GPU access, and your host's actual permissions remain to be validated.
 
