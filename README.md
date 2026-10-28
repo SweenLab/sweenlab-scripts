@@ -18,170 +18,65 @@ Have fun!
 
 ---
 
-# Scripts
+# Debian LXC Creation Wizard
+
+Create a Debian 12 or 13 LXC through a fully guided, step-by-step wizard. Every configuration stage is shown; no packages are preselected.
 
 | Script | Purpose | Documentation |
 |---------|---------|---------------|
-| **Debian LXC Creation Wizard** | Create a Debian LXC through step-by-step settings, package selection, and optional device passthrough (initial test build). | [View Guide](docs/proxmox-debian-lxc-create.md) |
-| **Proxmox Task Scheduler** | Create and manage scheduled maintenance tasks using interactive menus. | [View Guide](docs/proxmox-task-scheduler.md) |
-| **Proxmox Health Check** | Perform a comprehensive read-only health assessment of a Proxmox host, including storage, SMART health, package updates, networking, DNS, system services, and an overall health summary. | [View Guide](docs/proxmox-health-check.md) |
-| **Proxmox Host & LXC Maintenance Wizard** | Safely perform guided maintenance on the Proxmox host or Debian/Ubuntu LXC containers with maintenance profiles, progress tracking, automatic logging, and detailed summaries. | [View Guide](docs/proxmox-lxc-maintenance-wizard.md) |
-| **Proxmox VM Maintenance Wizard** | Run and schedule guided maintenance for Debian-family VMs through QEMU Guest Agent with logs, stopped-VM policies, and optional notifications. | [View Guide](docs/proxmox-vm-maintenance-wizard.md) |
+| [Debian LXC Creation Wizard](scripts/proxmox-debian-lxc-create.sh) | Choose container ID, hostname, tags, networking, resources, packages, features and optional device passthrough. | [View Guide](docs/proxmox-debian-lxc-create.md) |
 
----
+The companion [Debian tools installer](scripts/sweenlab-debian-tools.sh) runs inside the new container. Keep both scripts together in `scripts/`.
 
-# Features
+## Features
 
-- Interactive terminal menus
-- Beginner-friendly guided workflows
-- Safe defaults
-- Readable output
-- Automatic logging
-- Responsive terminal interface
-- Supports Debian and Ubuntu LXC containers
-- Supports Debian-family VMs through QEMU Guest Agent
-- Uses systemd timers for scheduled jobs
-- Optional notification support where available
-- Designed specifically for Proxmox VE
+- Step-by-step terminal menus with a complete review before creation.
+- Explicit unprivileged or privileged container selection.
+- IPv4/IPv6, bridge, VLAN, MTU, DNS, resource and startup configuration.
+- Optional git, curl, wget, Tailscale, Docker Engine, Docker Compose and useful utilities.
+- Explicit nesting, keyctl, FUSE, TUN and GPU device choices.
+- Official package repositories, signed packages, rerunnable tool installation and logs.
+- No downloaded shell scripts are executed automatically.
 
----
+## Quick Start
 
-# Quick Start
-
-Clone the repository:
+On the Proxmox host, clone the repository and inspect both scripts:
 
 ```bash
 git clone https://github.com/SweenLab/personal-proxmox-scripts.git
-```
-
-Or run a script directly from GitHub.
-
-## Debian LXC Creation Wizard (initial test build)
-
-Keep both new scripts in the same directory. Review them before running on a Proxmox host:
-
-```bash
 cd personal-proxmox-scripts
 less scripts/proxmox-debian-lxc-create.sh
 less scripts/sweenlab-debian-tools.sh
+```
+
+Then run the creation wizard as root:
+
+```bash
 bash scripts/proxmox-debian-lxc-create.sh
 ```
 
-The wizard asks each setting in sequence; no packages are preselected. See the [step-by-step guide](docs/proxmox-debian-lxc-create.md) for Docker, Tailscale, GPU/TUN passthrough, and current testing limitations. Run the creation wizard on the host; the companion installer runs inside the new CT only.
+The creation wizard runs on the Proxmox host. The companion tools installer runs only inside the intended Debian LXC. Follow the [step-by-step guide](docs/proxmox-debian-lxc-create.md) for prerequisites, passthrough permissions, retries and testing.
 
-## Proxmox Health Check
+## Testing Status
 
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/main/scripts/proxmox-health-check.sh)
-```
+Version 0.1.0 is an initial test build. Bash syntax and simulated workflow checks pass; live Proxmox, Docker, Tailscale and GPU validation is still required. Start with a disposable container.
 
-## Proxmox Task Scheduler
+## Documentation
 
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/main/scripts/proxmox-task-scheduler.sh)
-```
+- [Debian LXC Creation Wizard guide](docs/proxmox-debian-lxc-create.md)
 
-## Proxmox Host & LXC Maintenance Wizard
+## Releases
 
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/main/scripts/proxmox-lxc-maintenance-wizard.sh)
-```
+Version history and release notes are available on the [Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Historical releases can contain tools no longer present on the main branch.
 
-## Proxmox VM Maintenance Wizard
+## Contributing
 
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/main/scripts/proxmox-vm-maintenance-wizard.sh)
-```
+Suggestions and bug reports are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Each script includes its own documentation and usage guide.
+## Disclaimer
 
-Run scripts as **root** on the Proxmox host unless a script guide says otherwise.
+These scripts are provided as-is without warranty. Review the code and configuration before running it, and make backups of important systems. Use at your own risk.
 
----
+## License
 
-# VM Maintenance Notes
-
-The **Proxmox VM Maintenance Wizard** is for normal Debian-family Linux VMs.
-
-It supports:
-
-- Debian
-- Ubuntu
-- Kali Linux
-- Linux Mint
-- Pop!_OS
-- Raspberry Pi OS
-- other Debian-like guests with `ID_LIKE=debian`
-
-It requires QEMU Guest Agent inside each target VM.
-
-It intentionally does **not** update appliance-style operating systems such as:
-
-- Home Assistant OS
-- OPNsense
-
-Use those systems' web interfaces and official update guides instead.
-
----
-
-# Documentation
-
-Detailed documentation is available in the **docs** directory.
-
-- 📖 [Debian LXC Creation Wizard](docs/proxmox-debian-lxc-create.md)
-- 📖 [Proxmox Task Scheduler](docs/proxmox-task-scheduler.md)
-- 📖 [Proxmox Health Check](docs/proxmox-health-check.md)
-- 📖 [Proxmox Host & LXC Maintenance Wizard](docs/proxmox-lxc-maintenance-wizard.md)
-- 📖 [Proxmox VM Maintenance Wizard](docs/proxmox-vm-maintenance-wizard.md)
-
----
-
-# Releases
-
-Version history and release notes are available on the GitHub **Releases** page.
-
-👉 https://github.com/SweenLab/personal-proxmox-scripts/releases
-
----
-
-# Roadmap
-
-## Current
-
-- ✅ Proxmox Task Scheduler
-- ✅ Proxmox Health Check
-- ✅ Proxmox Host & LXC Maintenance Wizard
-- ✅ Proxmox VM Maintenance Wizard
-
-## Planned
-
-- 🚧 LXC Setup Wizard
-- 🚧 Docker Installer
-- 🚧 SMART Report Exporter
-- 🚧 Storage Report
-
----
-
-# Contributing
-
-Suggestions, bug reports, and feature requests are always welcome.
-
-If you find an issue or have an idea that would improve one of these scripts, feel free to open an Issue or submit a Pull Request.
-
----
-
-# Disclaimer
-
-These scripts are provided **as-is** without warranty.
-
-Although they are designed with safe defaults and are tested in my own homelab, you should always review any script before running it in your own environment.
-
-Make backups of important systems before performing maintenance.
-
-Use at your own risk.
-
----
-
-# License
-
-This project is licensed under the MIT License.
+This project is licensed under the [MIT License](LICENSE).
