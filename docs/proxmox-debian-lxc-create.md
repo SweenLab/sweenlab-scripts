@@ -7,10 +7,10 @@ Version 0.1.2 (initial test build). A step-by-step Debian LXC wizard with select
 Use the copy button in the top-right corner of the command block below, then paste the command into your **Proxmox node shell as root**. No cloning or companion file is needed:
 
 ```bash
-bash -c "$(curl -fsSL "https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/main/scripts/proxmox-debian-lxc-create.sh?nocache=$(date +%s)")"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/cad7d6686d98ac158abea982a548ed5d344414f7/scripts/proxmox-debian-lxc-create.sh)"
 ```
 
-The timestamp in the command requests a fresh download when the raw GitHub link has a stale cached copy.
+This command is pinned to the verified version 0.1.2 commit, avoiding stale copies of the main-branch download. The link should be updated when a newer script version is published.
 
 The wizard contains its guest setup code. After final confirmation it writes that embedded code to a temporary host file, copies it into the newly created CT, runs it there, and removes the temporary host file on exit. The saved copy inside the CT supports reviewed retries. No second script is fetched from the internet.
 
