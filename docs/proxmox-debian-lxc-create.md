@@ -1,16 +1,16 @@
 # SweenLab Debian LXC Creation Wizard
 
-Version 0.1.16 (initial test build). One self-contained script, fully step by step, with Back navigation and a final Create/Abort review. Live Proxmox testing is still required.
+Version 0.1.17 (initial test build). One self-contained script, fully step by step, with Back navigation and a final Create/Abort review. Live Proxmox testing is still required.
 
 ## Quick Start: copy and paste
 
 Use the copy button in the top-right corner of this block, then paste into your **Proxmox node shell as root**:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/a0c78c159474e5eaed7ba38b4a7179f64b8cc5d8/scripts/proxmox-debian-lxc-create.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/555026602b5470bb121365e575f832994f76b5c7/scripts/proxmox-debian-lxc-create.sh)"
 ```
 
-The command is pinned to the verified version 0.1.16 script to avoid stale raw GitHub main-branch downloads. No clone, companion file, or additional shell-script download is needed.
+The command is pinned to the verified version 0.1.17 script to avoid stale raw GitHub main-branch downloads. No clone, companion file, or additional shell-script download is needed.
 
 If an older wizard is still open, abort it and restart with this command. Use a new disposable CT ID for the first test. Do not reuse an ID left by a failed creation until its state has been inspected.
 
@@ -41,7 +41,7 @@ The UI centers prompts, fields and choices, with required prompts and choices in
 ## Configuration screens
 
 1. **Container details:** unused cluster-wide ID, blank required hostname, and optional tags separated by semicolons. Tags are case-sensitive: `TEST` and `test` are different. Match the exact capitalization of predefined Proxmox tags.
-2. **Networking:** choose an active configured Proxmox Linux bridge. Choices show only names such as `vmbr0` and `vmbr1`; Docker and temporary firewall bridges are hidden. Explicitly select a bridge and each IPv4/IPv6 mode (no mode is preselected; switching to static starts with a blank address field), and addresses/gateways where relevant. Untagged networking, MTU 1500, an automatically generated MAC, no rate limit, and inherited host DNS/search settings are applied in the background.
+2. **Networking:** choose an active configured Proxmox Linux bridge. Choices show only names such as `vmbr0` and `vmbr1`; Docker and temporary firewall bridges are hidden. Explicitly select a bridge and each IPv4/IPv6 mode (no mode is preselected; switching to static starts with a blank address field), and addresses/gateways where relevant. Static IPv4 requires an explicit numeric CIDR prefix, for example `10.10.10.204/24`; a bare address, dotted netmask or invalid prefix cannot continue. Prefixes 0–32 are accepted when the address is valid. Untagged networking, MTU 1500, an automatically generated MAC, no rate limit, and inherited host DNS/search settings are applied in the background.
 3. **Resources:** CPU cores, memory in MiB, root disk size in GiB (initially 10), and container storage. Storage uses a single-choice selector showing `( )` and `(x)` markers alongside names. Highlight with arrows, select with Space or Enter to immediately highlight Next, then press Enter to continue. Next is blocked until a choice is explicitly selected; the first row is not automatically selected. Back preserves your accepted selection.
 4. **Timezone and locale:** The guest locale is prefilled from the host configuration: `/etc/locale.conf`, then `/etc/default/locale`. Supported UTF-8 names are normalized; if no supported setting is found, `C.UTF-8` is used. SSH client locale variables are not used. You can edit the choice; it is generated where needed, written as the guest default and verified before the full upgrade. Timezone is automatically prefilled from the Proxmox host's timezone; edit if needed. If the host timezone cannot be resolved, UTC is shown.
 5. **Access:** unprivileged mode is initially Yes. Choose an optional host SSH public-key file. Enter and confirm a mandatory root console password. Passwords remain hidden and are never logged or included in command arguments. Setting a console password does not enable root password login over SSH.
@@ -112,7 +112,7 @@ tar: /var/lib/lxc/204/rootfs: Cannot open: Permission denied
 
 occurs inside Proxmox's template extraction, before guest setup. The wizard through version 0.1.4 passed its private-file `umask 077` to Proxmox. Proxmox's directory creation respects that mask, producing `0700` CT directories that mapped container root (host UID 100000) cannot traverse. This matches the reported root-owned `0700` directories.
 
-Version 0.1.16 runs Proxmox container commands in a subshell with `umask 022`, while logs and UI files retain their private mask. A regression test reproduces the old `0700` behavior with Perl's `File::Path::make_path` and verifies the corrected `0755` directories, private `0600` log files, and command status preservation. This has not yet been validated by creating a container on a live Proxmox host.
+Version 0.1.17 runs Proxmox container commands in a subshell with `umask 022`, while logs and UI files retain their private mask. A regression test reproduces the old `0700` behavior with Perl's `File::Path::make_path` and verifies the corrected `0755` directories, private `0600` log files, and command status preservation. This has not yet been validated by creating a container on a live Proxmox host.
 
 Choose a fresh unused CT ID for the next test. The wizard validates the ID format and checks that no VM or CT uses it through Proxmox. Leftover directories alone do not block selection or trigger a separate pre-creation rejection; Proxmox handles creation errors. Existing failed directories and disks are left untouched for separate inspection. The read-only mapped-root traversal preflight remains in place.
 
@@ -152,7 +152,7 @@ That retry example applies only after the CT has been created and the installer 
 
 ## Validation and release history
 
-Local checks cover bridge filtering, cached-template filtering through the real configuration flow, required hostname/passwords, Back preserving values, abort-before-mutation, hidden defaults, Tailscale flags/auth-output isolation, namespace preflight failure, creation diagnostics, and installer-failure preservation. UI rendering/key-handling tests cover the button layouts, defaults, masking, selections, and navigation. All 44 local checks pass for this release. Real curses pseudo-terminal smoke checks cover blank password submission at 80×24 and 93×24, plus review rendering at 93×24, with the orange/green color sequences verified. Checklist tests cover successful installation and incomplete Tailscale authentication.
+Local checks cover bridge filtering, cached-template filtering through the real configuration flow, required hostname/passwords, Back preserving values, abort-before-mutation, hidden defaults, Tailscale flags/auth-output isolation, namespace preflight failure, creation diagnostics, and installer-failure preservation. UI rendering/key-handling tests cover the button layouts, defaults, masking, selections, and navigation. All 46 local checks pass for this release. Real curses pseudo-terminal smoke checks cover blank password submission at 80×24 and 93×24, plus review rendering at 93×24, with the orange/green color sequences verified. Checklist tests cover successful installation and incomplete Tailscale authentication.
 
 These are simulated/terminal checks, not a successful live Proxmox installation. Live extraction, packages, Docker workloads, Tailscale login, GPU access, and your host's actual permissions remain to be validated.
 

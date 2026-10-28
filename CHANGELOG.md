@@ -2,6 +2,14 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.17 — 2026-10-28
+
+- Static IPv4 now requires an explicit numeric CIDR prefix (0–32), such as 10.10.10.204/24. Bare addresses are rejected rather than implicitly accepted as /32.
+- Missing/invalid prefixes, dotted netmasks and invalid IPv4 addresses keep the wizard on the address screen with a clear correction message.
+- Updated README, guide and immutable launcher.
+
+Validation: Bash syntax and all 46 local tests pass, including rejected bare addresses in the actual configuration flow and validator checks for valid /0, /24 and /32 plus malformed inputs. Live Proxmox provisioning has not been repeated for this input-validation change.
+
 ## Debian LXC Wizard 0.1.16 — 2026-10-28
 
 - Selecting all packages immediately focuses Next. Individual package choices keep focus in the list so multiple selections can be made.
