@@ -177,6 +177,22 @@ class TerminalUiTests(unittest.TestCase):
             self.assertGreaterEqual(len(fields), 3)
             self.assertEqual(set(fields), {((89 - 52) // 2, '[ ' + ' ' * 48 + ' ]')})
 
+    def test_storage_requires_explicit_single_selection(self):
+        options = [('local', ''), ('storage4tb', '')]
+        keys = [curses.KEY_RIGHT, '\n', curses.KEY_DOWN, ' ', curses.KEY_RIGHT, '\n']
+        result, drawn = self.drive('select', keys, '', options)
+        self.assertEqual(result, ('next', 'storage4tb'))
+        self.assertIn('Select one storage option before continuing.', drawn)
+        self.assertIn('( ) local', drawn)
+        self.assertIn('(x) storage4tb', drawn)
+        keys = [' ', curses.KEY_DOWN, ' ', curses.KEY_RIGHT, '\n']
+        self.assertEqual(self.drive('select', keys, '', options)[0], ('next', 'storage4tb'))
+
+    def test_storage_preserves_selection_on_return_and_allows_back(self):
+        options = [('local', ''), ('storage4tb', '')]
+        self.assertEqual(self.drive('select', [curses.KEY_RIGHT, '\n'], 'storage4tb', options)[0], ('next', 'storage4tb'))
+        self.assertEqual(self.drive('select', ['\t', '\n'], '', options)[0], ('back', ''))
+
     def test_no_default_for_optional_features(self):
         self.assertEqual(self.drive('yesno', ['\n'], '0')[0], ('next', '0'))
 

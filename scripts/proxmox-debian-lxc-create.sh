@@ -2,7 +2,7 @@
 # SweenLab Debian LXC Creation Wizard — MIT
 # https://github.com/SweenLab/personal-proxmox-scripts
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.12
+SCRIPT_VERSION=0.1.13
 COMPLETED=()
 CTID='' CREATED=0 LOG='' TMP='' UI_DIR='' UI_ACTION='' UI_VALUE=''
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
@@ -198,7 +198,7 @@ configure() {
             memory) title='Memory'; prompt=$'Memory in MiB\n\nQuick conversion:\n  512 MiB = 0.5 GiB    1024 MiB = 1 GiB\n  2048 MiB = 2 GiB     4096 MiB = 4 GiB\n  8192 MiB = 8 GiB    16384 MiB = 16 GiB';;
             disk) title='Root disk'; prompt='Root disk size in GiB';;
             root_store|template_store)
-                kind=menu
+                kind=select
                 if [[ "$key" == root_store ]]; then title='Container storage'; prompt='Where should the container disk be stored?'; names=$(list_storage rootdir)
                 else title='Template storage'; prompt='Where are your downloaded Debian templates stored?'; names=$(list_storage vztmpl); fi
                 while IFS= read -r line; do [[ -z "$line" ]] || options+=("$line" ''); done <<< "$names"
@@ -529,6 +529,8 @@ def run(screen, kind, title, prompt, seed, options):
     cursor = len(text)
     tags = [tag for tag, _ in options]
     selected = set(seed.splitlines())
+    choice = seed if seed in tags else ''
+    selection_error = ''
     row = tags.index(seed) if seed in tags else 0
     scroll = 0
     buttons = button_set(kind)
@@ -578,7 +580,7 @@ def run(screen, kind, title, prompt, seed, options):
                 else:
                     box.addnstr(y, table_x, label, table_width, body)
         else:
-            block_height = min(len(lines), 8) + 1 + (min(len(options), max(1, height - min(len(lines), 8) - 8)) if kind in ('menu', 'check') else 1)
+            block_height = min(len(lines), 8) + 1 + (min(len(options), max(1, height - min(len(lines), 8) - 8)) if kind in ('menu', 'check', 'select') else 1)
             prompt_y = max(2, 2 + (height - 7 - block_height) // 2)
             required = '(required)' in title
             for idx, line in enumerate(lines[:8]):
@@ -592,13 +594,13 @@ def run(screen, kind, title, prompt, seed, options):
                 field_x = field_left + 2
                 box.addnstr(content_y, field_left, '[ ' + ' ' * field_width + ' ]', field_width + 4, field)
                 box.addnstr(content_y, field_x, shown[offset:offset + field_width], field_width, field | (curses.A_BOLD if required else 0))
-            elif kind in ('menu', 'check'):
+            elif kind in ('menu', 'check', 'select'):
                 visible = max(1, height - content_y - 5)
                 start = max(0, min(row - visible + 1, max(0, len(options) - visible)))
                 for idx, (tag, label) in enumerate(options[start:start + visible], start):
                     checked = (set(tags) - {'__all__', '__none__'} <= selected) if tag == '__all__' else tag in selected
-                    mark = ('[x] ' if checked else '[ ] ') if kind == 'check' else ''
-                    label = (label or tag) if kind == 'menu' or tag in ('__all__', '__none__') else (tag if not label else tag + '  ' + label)
+                    mark = ('[x] ' if checked else '[ ] ') if kind == 'check' else (('(x) ' if tag == choice else '( ) ') if kind == 'select' else '')
+                    label = (label or tag) if kind in ('menu', 'select') or tag in ('__all__', '__none__') else (tag if not label else tag + '  ' + label)
                     write(content_y + idx - start, 3, mark + label,
                           ((highlight or curses.A_REVERSE) if idx == row and focus == 'content' else success) | (curses.A_BOLD if required else 0))
         labels = ['< ' + value[0] + ' >' for value in buttons]
@@ -610,6 +612,10 @@ def run(screen, kind, title, prompt, seed, options):
         hint = 'Up/Down: field/buttons | Left/Right: edit/choose | Enter: confirm | Esc: abort'
         if kind == 'check':
             hint = 'Arrows: navigate | Right: buttons | Space: select | Enter: next | Esc: abort'
+        if kind == 'select':
+            hint = 'Up/Down: highlight | Space/Enter: select | Tab: buttons | Esc: abort'
+        if selection_error:
+            write(height - 3, 3, selection_error, accent | curses.A_BOLD)
         if kind == 'review':
             hint = f'{scroll + 1}-{min(scroll + limit, len(rows))}/{len(rows)} | Up/Down: scroll | Left/Right: buttons | Esc: abort'
         write(height - 2, 3, hint, curses.A_DIM)
@@ -630,7 +636,7 @@ def run(screen, kind, title, prompt, seed, options):
                 step = -1 if key == curses.KEY_BTAB else 1
                 target = button + step
                 if target < 0 or target >= len(buttons):
-                    if kind in ('input', 'password', 'menu', 'check'):
+                    if kind in ('input', 'password', 'menu', 'check', 'select'):
                         focus = 'content'
                     else:
                         button = target % len(buttons)
@@ -640,14 +646,14 @@ def run(screen, kind, title, prompt, seed, options):
         if kind == 'review' and key in (curses.KEY_UP, curses.KEY_DOWN, curses.KEY_NPAGE, curses.KEY_PPAGE):
             scroll += {curses.KEY_UP: -1, curses.KEY_DOWN: 1, curses.KEY_NPAGE: 8, curses.KEY_PPAGE: -8}[key]
             continue
-        if kind in ('input', 'password', 'menu', 'check'):
+        if kind in ('input', 'password', 'menu', 'check', 'select'):
             if focus == 'buttons' and key == curses.KEY_UP:
                 focus = 'content'
                 continue
             if focus == 'content' and kind in ('input', 'password') and key in (curses.KEY_UP, curses.KEY_DOWN):
                 focus, button = 'buttons', 1
                 continue
-            if focus == 'content' and kind in ('menu', 'check') and key == curses.KEY_RIGHT:
+            if focus == 'content' and kind in ('menu', 'check', 'select') and key == curses.KEY_RIGHT:
                 focus, button = 'buttons', 1
                 continue
         if kind == 'yesno' and key in (curses.KEY_UP, curses.KEY_DOWN):
@@ -657,13 +663,17 @@ def run(screen, kind, title, prompt, seed, options):
             button = (button + (1 if key == curses.KEY_RIGHT else -1)) % len(buttons)
             continue
         if focus == 'content':
-            if kind in ('menu', 'check'):
+            if kind in ('menu', 'check', 'select'):
                 if key in (curses.KEY_UP, curses.KEY_DOWN):
                     target = row + (1 if key == curses.KEY_DOWN else -1)
                     if target < 0 or target >= len(options):
                         focus, button = 'buttons', 1
                     else:
                         row = target
+                    continue
+                if kind == 'select' and key in (' ', '\n', '\r', curses.KEY_ENTER):
+                    choice = tags[row] if tags else ''
+                    selection_error = ''
                     continue
                 if key == ' ' and kind == 'check' and options:
                     tag = options[row][0]
@@ -702,6 +712,12 @@ def run(screen, kind, title, prompt, seed, options):
                 return action, value or ''
             if kind in ('input', 'password'):
                 return action, text
+            if kind == 'select':
+                if choice not in tags:
+                    selection_error = 'Select one storage option before continuing.'
+                    focus = 'content'
+                    continue
+                return action, choice
             if kind == 'menu':
                 return action, tags[row] if tags else ''
             if kind == 'check':
