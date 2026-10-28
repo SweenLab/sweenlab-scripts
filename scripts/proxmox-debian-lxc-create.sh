@@ -2,7 +2,7 @@
 # SweenLab Debian LXC Creation Wizard — MIT
 # https://github.com/SweenLab/personal-proxmox-scripts
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.8
+SCRIPT_VERSION=0.1.9
 CTID='' CREATED=0 LOG='' TMP='' UI_DIR='' UI_ACTION='' UI_VALUE=''
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 cleanup() {
@@ -161,7 +161,7 @@ configure() {
         case "$key" in
             ctid) prompt='Container ID (unused across the cluster)' ;;
             hostname) prompt='Hostname (required; starts blank)' ;;
-            tags) prompt='Tags separated by semicolons; leave blank for none' ;;
+            tags) prompt=$'Tags separated by semicolons; leave blank for none.\n\nTags are case-sensitive: TEST and test are different tags.\nMatch the exact capitalization of your predefined Proxmox tags.' ;;
             bridge)
                 kind=menu; title='Network bridge'; prompt='Choose the bridge for this container.'
                 names=$(configured_linux_bridges)
