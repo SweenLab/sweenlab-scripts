@@ -2,7 +2,7 @@
 # SweenLab Debian LXC Creation Wizard — MIT
 # https://github.com/SweenLab/personal-proxmox-scripts
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.16
+SCRIPT_VERSION=0.1.17
 COMPLETED=()
 CTID='' CREATED=0 LOG='' TMP='' UI_DIR='' UI_ACTION='' UI_VALUE=''
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
@@ -88,7 +88,9 @@ for line in sys.stdin:
         print(volume)
 ' "$1" "$2" <<< "$data"
 }
-validate_ip() { python3 -c 'import ipaddress,sys; (ipaddress.IPv4Interface if sys.argv[1]=="4" else ipaddress.IPv6Interface)(sys.argv[2])' "$1" "$2" 2>/dev/null; }
+validate_ip() {
+    if [[ $1 == 4 && ! $2 =~ ^[^/]+/([0-9]|[12][0-9]|3[0-2])$ ]]; then return 1; fi
+    python3 -c 'import ipaddress,sys; (ipaddress.IPv4Interface if sys.argv[1]=="4" else ipaddress.IPv6Interface)(sys.argv[2])' "$1" "$2" 2>/dev/null; }
 validate_address() { python3 -c 'import ipaddress,sys; (ipaddress.IPv4Address if sys.argv[1]=="4" else ipaddress.IPv6Address)(sys.argv[2])' "$1" "$2" 2>/dev/null; }
 validate_rate() { python3 -c 'import decimal,sys; n=decimal.Decimal(sys.argv[1]); sys.exit(0 if n.is_finite() and n>=0 and n<=8192 else 1)' "$1" 2>/dev/null; }
 yes_word() { if [[ "$1" == 1 ]]; then printf Yes; else printf No; fi; }
@@ -263,7 +265,7 @@ configure() {
             ipmode) [[ $ipmode == dhcp || $ipmode == static || $ipmode == manual ]] || error='Select an IPv4 mode.'; if [[ $ipmode == static && ( $ip == dhcp || $ip == manual ) ]]; then ip=''; fi;;
             ip6mode) [[ $ip6mode == manual || $ip6mode == auto || $ip6mode == dhcp || $ip6mode == static ]] || error='Select an IPv6 mode.'; if [[ $ip6mode == static && ( $ip6 == dhcp || $ip6 == manual || $ip6 == auto ) ]]; then ip6=''; fi;;
             locale_name) [[ $locale_name == C.UTF-8 || $locale_name =~ ^[a-zA-Z]{2,3}_[a-zA-Z]{2}\.UTF-8$ ]] || error='Enter a UTF-8 locale such as en_US.UTF-8.';;
-            ip) validate_ip 4 "$ip" || error='Enter IPv4 with a prefix length.';;
+            ip) validate_ip 4 "$ip" || error='CIDR is required, for example 10.10.10.204/24 (prefix 0-32).';;
             gateway) [[ -z "$gateway" ]] || validate_address 4 "$gateway" || error='Invalid IPv4 gateway.';;
             ip6) validate_ip 6 "$ip6" || error='Enter IPv6 with a prefix length.';;
             gateway6) [[ -z "$gateway6" ]] || validate_address 6 "$gateway6" || error='Invalid IPv6 gateway.';;

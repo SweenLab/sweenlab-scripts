@@ -64,14 +64,14 @@ pct() {
     if [[ "$1" == exec && "$*" == *'bash /root/sweenlab-debian-tools.sh'* && "$SCENARIO" == installer-fail ]]; then return 42; fi
     return 0
 }
-visits_memory=0; visits_disk=0; visits_review=0; visits_password=0; visits_hostname=0; visits_selected=0; visits_ipmode=0; visits_gpu=0
+visits_memory=0; visits_disk=0; visits_review=0; visits_password=0; visits_hostname=0; visits_selected=0; visits_ipmode=0; visits_gpu=0; visits_ip=0
 ui() {
     printf '%s|%s|seed=%s|error=%s\\n' "$key" "$1" "$([[ "$key" == password* ]] && echo HIDDEN || printf '%s' "$4")" "$error" >> "$FIXTURE/trace"
     UI_ACTION=next; UI_VALUE=$4
     [[ ( $SCENARIO != verbose && $SCENARIO != ts-fail ) || $key != verbose ]] || UI_VALUE=1
     [[ "$SCENARIO" != abort ]] || { UI_ACTION=abort; return; }
     case "$key" in
-        ip) [[ "$4" != dhcp ]] || exit 94; UI_VALUE=10.10.10.204/24;;
+        ip) visits_ip=$((visits_ip+1)); [[ "$4" != dhcp ]] || exit 94; UI_VALUE=10.10.10.204/24; if [[ $SCENARIO == missing-cidr && $visits_ip == 1 ]]; then UI_VALUE=10.10.10.204; fi;;
         locale_name) UI_VALUE=en_GB.UTF-8;;
         hostname) visits_hostname=$((visits_hostname+1)); UI_VALUE=test-debian
             if [[ "$SCENARIO" == mandatory && "$visits_hostname" == 1 ]]; then UI_VALUE=''; fi;;
@@ -198,6 +198,22 @@ configure
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('Select at least one GPU device', files['trace'])
         self.assertIn('/dev/dri/renderD128', files['review'])
+
+    def test_static_ipv4_without_cidr_cannot_advance(self):
+        result, files = self.exercise('missing-cidr')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('CIDR is required', files['trace'])
+        self.assertEqual(files['trace'].count('ip|input|'), 2)
+        self.assertIn('IPv4            10.10.10.204/24', files['review'])
+
+    def test_ipv4_cidr_validator_requires_numeric_prefix(self):
+        for address, valid in [('10.10.10.204/24', True), ('10.0.0.1/0', True), ('10.0.0.1/32', True),
+                               ('10.10.10.204', False), ('', False), ('10.0.0.1/33', False),
+                               ('10.0.0.1/255.255.255.0', False), ('999.0.0.1/24', False),
+                               ('10.0.0.1/', False), ('10.0.0.1/abc', False)]:
+            with self.subTest(address=address):
+                result = subprocess.run(['bash', '-c', 'source "$1"; validate_ip 4 "$2"', 'test', str(SCRIPT), address], capture_output=True, text=True)
+                self.assertEqual(result.returncode == 0, valid, result.stderr)
 
     def test_namespace_failure_happens_before_pct_create(self):
         result, files = self.exercise('namespace-fail', execute=True)
