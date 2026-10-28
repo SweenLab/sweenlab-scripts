@@ -2,7 +2,8 @@
 # SweenLab Debian LXC Creation Wizard — MIT
 # https://github.com/SweenLab/personal-proxmox-scripts
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.10
+SCRIPT_VERSION=0.1.11
+COMPLETED=()
 CTID='' CREATED=0 LOG='' TMP='' UI_DIR='' UI_ACTION='' UI_VALUE=''
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 cleanup() {
@@ -207,8 +208,8 @@ configure() {
             tz) title='Timezone'; prompt='Prefilled from the Proxmox host. Edit if needed.';;
             unpriv) kind=yesno; title='Container type'; prompt='Create an unprivileged container?';;
             keyfile) title='SSH key'; prompt='Optional host path to an SSH public key file; leave blank to skip';;
-            password) kind=password; title='Root password'; prompt='Enter the required root console password (hidden).';;
-            password_confirm) kind=password; title='Confirm password'; prompt='Re-enter the root password (hidden).';;
+            password) seed=''; kind=password; title='Root password'; prompt='Enter the required root console password (hidden).';;
+            password_confirm) seed=''; kind=password; title='Confirm password'; prompt='Re-enter the root password (hidden).';;
             template)
                 kind=menu; title='Downloaded Debian template'; prompt='Choose a template already downloaded on this storage.'
                 names=$(list_downloaded_templates "$template_store" "$arch")
@@ -299,19 +300,23 @@ configure() {
     done
 }
 progress() {
-    local state=$1 message=$2 orange='' green='' reset=''
+    local state=$1 message=$2 orange='' green='' neutral='' reset=''
     if [[ ${PROGRESS_COLOR:-0} == 1 && ${TERM:-dumb} != dumb && -z ${NO_COLOR:-} ]]; then
-        orange=$'\033[38;5;208m'; green=$'\033[38;5;114m'; reset=$'\033[0m'
+        orange=$'\033[38;5;208m'; green=$'\033[38;5;114m'; neutral=$'\033[38;5;252m'; reset=$'\033[0m'
     fi
-    if [[ $state == OK ]]; then printf '  %s✅ [OK]%s %s\n' "$green" "$reset" "$message"
-    else printf '  %s⏳ [..]%s %s\n' "$orange" "$reset" "$message"; fi
+    if [[ $state == OK || $state == CHECK ]]; then
+        [[ $state != OK ]] || COMPLETED+=("$message")
+        printf '  %s✅%s %s%s\n' "$green" "$neutral" "$message" "$reset"
+    else printf '  %s%s%s\n' "$orange" "$message" "$reset"; fi
 }
 install_stage() {
     local label=$1 rc=0 output
     shift
     progress RUN "$label"
     if (( verbose )); then
+        if [[ ${PROGRESS_COLOR:-0} == 1 && -z ${NO_COLOR:-} ]]; then printf '\033[38;5;252m'; fi
         "$@" || rc=$?
+        if [[ ${PROGRESS_COLOR:-0} == 1 && -z ${NO_COLOR:-} ]]; then printf '\033[0m'; fi
     else
         output=$(mktemp "$UI_DIR/stage.XXXXXX") || return $?
         "$@" >"$output" 2>&1 || rc=$?
@@ -323,6 +328,7 @@ install_stage() {
     progress OK "$label"
 }
 execute_plan() {
+    COMPLETED=()
     PROGRESS_COLOR=0
     [[ ! -t 1 ]] || PROGRESS_COLOR=1
     umask 077
@@ -390,9 +396,14 @@ execute_plan() {
     bash -n "$TMP"; sha256sum "$TMP" >> "$LOG"
     install_stage "🧰 Prepare embedded installer" proxmox_pct push "$CTID" "$TMP" /root/sweenlab-debian-tools.sh --perms 0700
     while IFS= read -r item; do [[ -z "$item" || $item == __none__ ]] || tools+=("$item"); done <<< "$selected"
-    install_stage "🌐 Configure locale, fully update Debian and install tools" proxmox_pct exec "$CTID" -- bash /root/sweenlab-debian-tools.sh --timezone "$tz" --locale "$locale_name" --upgrade 1 ${tools[@]+"${tools[@]}"}
+    install_stage "🌐 Configure locale, fully update Debian and install tools" proxmox_pct exec "$CTID" -- env LANG=C.UTF-8 LC_ALL=C.UTF-8 LANGUAGE= bash /root/sweenlab-debian-tools.sh --timezone "$tz" --locale "$locale_name" --upgrade 1 ${tools[@]+"${tools[@]}"}
+    progress OK "Locale $locale_name configured and UTF-8 verified"
+    progress OK "Timezone $tz configured"
+    progress OK "Debian full upgrade completed"
+    for item in ${tools[@]+"${tools[@]}"}; do progress OK "Selected tool installed: $item"; done
+    local login_rc=0
     if (( tailscale && ts_up )); then
-        local ssh=false accept_dns=true routes=false login_rc=0
+        local ssh=false accept_dns=true routes=false
         contains_line ssh "$ts_options" && ssh=true
         contains_line ignore-dns "$ts_options" && accept_dns=false
         contains_line accept-routes "$ts_options" && routes=true
@@ -402,7 +413,14 @@ execute_plan() {
         if (( login_rc )); then
             printf '[ATTENTION] Tailscale sign-in is incomplete; CT and packages are preserved. Retry:\n'
             printf 'pct exec %s -- tailscale up --ssh=%s --accept-dns=%s --accept-routes=%s --qr=false\n' "$CTID" "$ssh" "$accept_dns" "$routes"
+        else
+            progress OK 'Tailscale sign-in completed'
         fi
+    fi
+    if (( verbose )); then
+        printf '\n  ── Completed · CT %s (%s) ──\n' "$CTID" "$hostname"
+        for item in "${COMPLETED[@]}"; do progress CHECK "$item"; done
+        (( login_rc == 0 )) || printf '  ⚠ Tailscale sign-in is incomplete.\n'
     fi
     printf '\n✅ CT %s created and selected packages installed. Log: %s\n' "$CTID" "$LOG"
     proxmox_pct exec "$CTID" -- hostname -I
@@ -458,6 +476,7 @@ write_ui() {
     cat <<'SWEENLAB_UI'
 import curses
 import os
+import re
 import sys
 import textwrap
 
@@ -470,10 +489,29 @@ def button_set(kind):
     return [('Back', 'back', ''), ('Create' if kind == 'review' else 'Next', 'next', None), ('Abort', 'abort', '')]
 
 
+def review_rows(prompt, width):
+    rows = []
+    for raw in prompt.splitlines():
+        line = raw.strip()
+        if not line:
+            rows.append(('', '', 'space'))
+        elif line.isupper():
+            rows.append((line, '', 'section'))
+        else:
+            fields = re.split(r'\s{2,}', line, maxsplit=1)
+            if len(fields) == 2:
+                label, value = fields
+                for idx, part in enumerate(textwrap.wrap(value, max(12, width - 21)) or ['']):
+                    rows.append((label if idx == 0 else '', part, 'value'))
+            else:
+                rows.extend((part, '', 'note') for part in textwrap.wrap(line, width))
+    return rows
+
+
 def run(screen, kind, title, prompt, seed, options):
     curses.curs_set(0)
     screen.keypad(True)
-    accent = success = highlight = 0
+    accent = success = highlight = body = 0
     try:
         if curses.has_colors() and not os.environ.get('NO_COLOR'):
             curses.start_color()
@@ -481,10 +519,12 @@ def run(screen, kind, title, prompt, seed, options):
             curses.init_pair(1, 208 if curses.COLORS >= 256 else curses.COLOR_YELLOW, -1)
             curses.init_pair(2, 114 if curses.COLORS >= 256 else curses.COLOR_GREEN, -1)
             curses.init_pair(3, curses.COLOR_BLACK, 114 if curses.COLORS >= 256 else curses.COLOR_GREEN)
-            accent, success, highlight = (curses.color_pair(i) for i in (1, 2, 3))
+            curses.init_pair(4, 252 if curses.COLORS >= 256 else curses.COLOR_WHITE, -1)
+            accent, success, highlight, body = (curses.color_pair(i) for i in (1, 2, 3, 4))
+            screen.bkgd(' ', body)
     except curses.error:
         pass
-    text = seed
+    text = '' if kind == 'password' else seed
     cursor = len(text)
     tags = [tag for tag, _ in options]
     selected = set(seed.splitlines())
@@ -509,6 +549,7 @@ def run(screen, kind, title, prompt, seed, options):
         top = 1
         height = h - 2
         box = screen.derwin(height, width, top, left)
+        box.bkgd(' ', body)
         box.box()
         def write(y, x, value, attr=0):
             if 0 <= y < height - 1:
@@ -521,24 +562,33 @@ def run(screen, kind, title, prompt, seed, options):
         for paragraph in prompt.splitlines():
             lines.extend(textwrap.wrap(paragraph, width - 6) or [''])
         if kind == 'review':
+            table_width = min(width - 10, 76)
+            table_x = (width - table_width) // 2
+            rows = review_rows(prompt, table_width)
             limit = height - 7
-            scroll = max(0, min(scroll, max(0, len(lines) - limit)))
-            for idx, line in enumerate(lines[scroll:scroll + limit]):
-                write(2 + idx, 3, line)
+            scroll = max(0, min(scroll, max(0, len(rows) - limit)))
+            for idx, (label, value, role) in enumerate(rows[scroll:scroll + limit]):
+                y = 2 + idx
+                if role == 'section':
+                    box.addnstr(y, table_x, label + ' ' + '─' * max(0, table_width - len(label) - 1), table_width, accent | curses.A_BOLD)
+                elif role == 'value':
+                    box.addnstr(y, table_x, label, 19, success)
+                    box.addnstr(y, table_x + 21, value, table_width - 21, body)
+                else:
+                    box.addnstr(y, table_x, label, table_width, body)
         else:
             block_height = min(len(lines), 8) + 1 + (min(len(options), max(1, height - min(len(lines), 8) - 8)) if kind in ('menu', 'check') else 1)
             prompt_y = max(2, 2 + (height - 7 - block_height) // 2)
             required = '(required)' in title
             for idx, line in enumerate(lines[:8]):
-                write(prompt_y + idx, 3, line, curses.A_BOLD if required else 0)
+                write(prompt_y + idx, 3, line, success | (curses.A_BOLD if required else 0))
             content_y = prompt_y + 1 + min(len(lines), 8)
             if kind in ('input', 'password'):
                 shown = '*' * len(text) if kind == 'password' else text
                 field_width = width - 8
                 offset = max(0, cursor - field_width + 1)
                 field_x = max(3, (width - min(len(shown[offset:]), field_width)) // 2)
-                box.addnstr(content_y, 3, ' ' * field_width, field_width, curses.A_REVERSE if focus == 'content' else 0)
-                box.addnstr(content_y, field_x, shown[offset:], field_width, (curses.A_REVERSE if focus == 'content' else 0) | (curses.A_BOLD if required else 0))
+                box.addnstr(content_y, field_x, shown[offset:], field_width, ((highlight or curses.A_REVERSE) if focus == 'content' else success) | (curses.A_BOLD if required else 0))
             elif kind in ('menu', 'check'):
                 visible = max(1, height - content_y - 5)
                 start = max(0, min(row - visible + 1, max(0, len(options) - visible)))
@@ -547,18 +597,18 @@ def run(screen, kind, title, prompt, seed, options):
                     mark = ('[x] ' if checked else '[ ] ') if kind == 'check' else ''
                     label = (label or tag) if kind == 'menu' or tag in ('__all__', '__none__') else (tag if not label else tag + '  ' + label)
                     write(content_y + idx - start, 3, mark + label,
-                          ((highlight or curses.A_REVERSE) if idx == row and focus == 'content' else (success if checked and kind == 'check' else 0)) | (curses.A_BOLD if required else 0))
+                          ((highlight or curses.A_REVERSE) if idx == row and focus == 'content' else success) | (curses.A_BOLD if required else 0))
         labels = ['< ' + value[0] + ' >' for value in buttons]
         total = sum(map(len, labels)) + 4 * (len(labels) - 1)
         x = max(2, (width - total) // 2)
         for idx, label in enumerate(labels):
-            write(height - 4, x, label, (highlight or curses.A_REVERSE) | curses.A_BOLD if idx == button else accent)
+            write(height - 4, x, label, (highlight or curses.A_REVERSE) | curses.A_BOLD if idx == button and focus == 'buttons' else accent)
             x += len(label) + 4
         hint = 'Up/Down: field/buttons | Left/Right: edit/choose | Enter: confirm | Esc: abort'
         if kind == 'check':
             hint = 'Arrows: navigate | Right: buttons | Space: select | Enter: next | Esc: abort'
         if kind == 'review':
-            hint = 'Up/Down: scroll | Left/Right: buttons | Esc: abort'
+            hint = f'{scroll + 1}-{min(scroll + limit, len(rows))}/{len(rows)} | Up/Down: scroll | Left/Right: buttons | Esc: abort'
         write(height - 2, 3, hint, curses.A_DIM)
         curses.curs_set(1 if focus == 'content' and kind in ('input', 'password') else 0)
         if focus == 'content' and kind in ('input', 'password'):
@@ -572,7 +622,7 @@ def run(screen, kind, title, prompt, seed, options):
         if key in ('\t', curses.KEY_BTAB):
             if focus == 'content':
                 focus = 'buttons'
-                button = len(buttons) - 1 if key == curses.KEY_BTAB else 1
+                button = len(buttons) - 1 if key == curses.KEY_BTAB else 0
             else:
                 step = -1 if key == curses.KEY_BTAB else 1
                 target = button + step

@@ -48,5 +48,5 @@ rc=0; install_stage Failure command_fixture 42 || rc=$?
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.count('PACKAGE-DETAIL'), 2)
             self.assertEqual((pathlib.Path(directory) / 'full.log').read_text().count('PACKAGE-DETAIL'), 2)
-            self.assertIn('[OK] Quiet', result.stdout)
-            self.assertNotIn('[OK] Failure', result.stdout)
+            self.assertIn('✅ Quiet', result.stdout)
+            self.assertNotIn('✅ Failure', result.stdout)

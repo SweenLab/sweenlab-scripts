@@ -59,7 +59,7 @@ pct() {
         [[ "$credential" == 'root:fixture-secret' ]] || return 92
     fi
     if [[ "$1" == push ]]; then cp "$3" "$FIXTURE/guest.sh"; fi
-    if [[ "$1" == exec && "$*" == *'tailscale up'* ]]; then echo 'SECRET-AUTH-URL'; fi
+    if [[ "$1" == exec && "$*" == *'tailscale up'* ]]; then echo 'SECRET-AUTH-URL'; [[ $SCENARIO != ts-fail ]] || return 1; fi
     if [[ "$1" == exec && "$*" == *'bash /root/sweenlab-debian-tools.sh'* && "$SCENARIO" == installer-fail ]]; then return 42; fi
     return 0
 }
@@ -67,6 +67,7 @@ visits_memory=0; visits_disk=0; visits_review=0; visits_password=0; visits_hostn
 ui() {
     printf '%s|%s|seed=%s|error=%s\\n' "$key" "$1" "$([[ "$key" == password* ]] && echo HIDDEN || printf '%s' "$4")" "$error" >> "$FIXTURE/trace"
     UI_ACTION=next; UI_VALUE=$4
+    [[ ( $SCENARIO != verbose && $SCENARIO != ts-fail ) || $key != verbose ]] || UI_VALUE=1
     [[ "$SCENARIO" != abort ]] || { UI_ACTION=abort; return; }
     case "$key" in
         ip) [[ "$4" != dhcp ]] || exit 94; UI_VALUE=10.10.10.204/24;;
@@ -86,7 +87,7 @@ ui() {
             if [[ "$SCENARIO" == back && "$visits_disk" == 1 ]]; then UI_ACTION=back; fi;;
         password) visits_password=$((visits_password+1)); UI_VALUE=fixture-secret
             if [[ "$SCENARIO" == mandatory && "$visits_password" == 1 ]]; then UI_VALUE=''; fi;;
-        password_confirm) UI_VALUE=fixture-secret;;
+        password_confirm) [[ -z $4 ]] || exit 95; UI_VALUE=fixture-secret;;
         selected) visits_selected=$((visits_selected+1)); if [[ "$SCENARIO" == no-packages ]]; then if (( visits_selected == 1 )); then UI_VALUE=''; else UI_VALUE=__none__; fi; else UI_VALUE=$'git\\ncompose\\ntailscale'; fi;;
         review) visits_review=$((visits_review+1));
             printf '%s' "$3" > "$FIXTURE/review"
@@ -158,6 +159,25 @@ configure
         self.assertNotIn('Refresh the Proxmox template catalog', files['trace'])
         for removed in ('cpulimit|', 'cpuunits|', 'swap|', 'protection|', 'startup|', 'upgrade|', 'vlan|', 'mtu|', 'mac|', 'rate|', 'dns|', 'search|'):
             self.assertNotIn('\n' + removed, '\n' + files['trace'])
+
+    def test_verbose_ends_with_completed_checklist(self):
+        result, files = self.exercise('verbose', execute=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        logs = '\n'.join(value for key, value in files.items() if key.startswith('logs/'))
+        self.assertIn('── Completed · CT 204 (test-debian) ──', logs)
+        summary = logs.split('── Completed', 1)[1]
+        for text in ('✅ Locale en_GB.UTF-8 configured', '✅ Debian full upgrade completed', '✅ Selected tool installed: git', '✅ Tailscale sign-in completed'):
+            self.assertIn(text, summary)
+        self.assertNotIn('[..]', logs)
+        self.assertIn('<env> <LANG=C.UTF-8> <LC_ALL=C.UTF-8>', files['calls'])
+
+    def test_incomplete_login_is_not_checked_off(self):
+        result, files = self.exercise('ts-fail', execute=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        logs = '\n'.join(value for key, value in files.items() if key.startswith('logs/'))
+        summary = logs.split('── Completed', 1)[1]
+        self.assertIn('⚠ Tailscale sign-in is incomplete.', summary)
+        self.assertNotIn('✅ Tailscale sign-in completed', summary)
 
     def test_namespace_failure_happens_before_pct_create(self):
         result, files = self.exercise('namespace-fail', execute=True)

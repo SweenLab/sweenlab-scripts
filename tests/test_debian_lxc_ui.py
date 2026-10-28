@@ -21,6 +21,7 @@ class Screen:
     def getmaxyx(self): return 24, 93
     def derwin(self, *args): return self
     def box(self): pass
+    def bkgd(self, *args): pass
     def addnstr(self, y, x, value, n, *args):
         self.drawn.append(value[:n])
         self.positions.append((y, x, value[:n], args))
@@ -62,11 +63,11 @@ class TerminalUiTests(unittest.TestCase):
         self.assertEqual(self.drive('yesno', [curses.KEY_RIGHT, '\n'], '1')[0], ('next', '0'))
 
     def test_input_back_and_abort(self):
-        self.assertEqual(self.drive('input', ['\t', curses.KEY_LEFT, '\n'], 'kept')[0], ('back', ''))
+        self.assertEqual(self.drive('input', ['\t', '\n'], 'kept')[0], ('back', ''))
         self.assertEqual(self.drive('input', ['\x1b'])[0], ('abort', ''))
 
     def test_password_is_masked(self):
-        result, drawn = self.drive('password', ['\n'], 'fixture-secret')
+        result, drawn = self.drive('password', list('fixture-secret') + ['\n'], 'old-secret')
         self.assertEqual(result, ('next', 'fixture-secret'))
         self.assertNotIn('fixture-secret', drawn)
         self.assertIn('**************', drawn)
@@ -98,7 +99,7 @@ class TerminalUiTests(unittest.TestCase):
              patch.object(curses, 'COLORS', 256, create=True), patch.object(curses, 'init_pair') as pairs, \
              patch.object(curses, 'color_pair', return_value=0):
             self.ui.run(screen, 'yesno', 'Test', 'Question', '1', [])
-        self.assertEqual([call.args for call in pairs.call_args_list], [(1, 208, -1), (2, 114, -1), (3, curses.COLOR_BLACK, 114)])
+        self.assertEqual([call.args for call in pairs.call_args_list], [(1, 208, -1), (2, 114, -1), (3, curses.COLOR_BLACK, 114), (4, 252, -1)])
 
     def test_arrow_only_input_navigation_and_cursor_editing(self):
         keys = [curses.KEY_LEFT, 'X', curses.KEY_DOWN, curses.KEY_LEFT, '\n']
@@ -133,6 +134,37 @@ class TerminalUiTests(unittest.TestCase):
             for y, x, value, attrs in matches:
                 self.assertEqual(x, (89 - len(value)) // 2)
                 self.assertTrue(attrs[0] & curses.A_BOLD)
+
+    def test_tab_reaches_every_button_in_both_directions(self):
+        for kind, seed, options in [('input', 'kept', []), ('password', '', []), ('menu', 'git', [('git', '')]), ('check', 'git', [('git', '')])]:
+            with self.subTest(kind=kind):
+                self.assertEqual(self.drive(kind, ['\t', '\n'], seed, options)[0], ('back', ''))
+                self.assertEqual(self.drive(kind, ['\t', '\t', '\t', '\n'], seed, options)[0], ('abort', ''))
+                self.assertEqual(self.drive(kind, [curses.KEY_BTAB, curses.KEY_BTAB, curses.KEY_BTAB, '\n'], seed, options)[0], ('back', ''))
+
+    def test_password_always_starts_empty_even_with_previous_value(self):
+        result, drawn = self.drive('password', list('new-secret') + ['\n'], 'previous-secret')
+        self.assertEqual(result, ('next', 'new-secret'))
+        self.assertNotIn('previous-secret', drawn)
+        self.assertNotIn('***************', drawn)
+
+    def test_text_field_has_no_full_width_inverse_bar(self):
+        screen = Screen(['\n'])
+        with patch.object(curses, 'curs_set'), patch.object(curses, 'has_colors', return_value=False):
+            self.ui.run(screen, 'input', 'Test', 'Question', 'text', [])
+        self.assertFalse(any(value.isspace() and len(value) > 10 for _, _, value, _ in screen.positions))
+
+    def test_review_uses_fixed_label_and_value_columns_and_scroll_count(self):
+        prompt = 'CONTAINER\n  ID / name       204 / test\n  Tags            TEST\n\nRESOURCES\n  Root disk       local · 10 GiB'
+        screen = Screen(['\n'])
+        with patch.object(curses, 'curs_set'), patch.object(curses, 'has_colors', return_value=False):
+            self.ui.run(screen, 'review', 'Review', prompt, '', [])
+        labels = [x for _, x, value, _ in screen.positions if value in ('ID / name', 'Tags', 'Root disk')]
+        values = [x for _, x, value, _ in screen.positions if value in ('204 / test', 'TEST', 'local · 10 GiB')]
+        self.assertEqual(len(set(labels)), 1)
+        self.assertEqual(len(set(values)), 1)
+        self.assertGreater(values[0], labels[0])
+        self.assertTrue(any('1-6/6' in value for value in screen.drawn))
 
     def test_no_default_for_optional_features(self):
         self.assertEqual(self.drive('yesno', ['\n'], '0')[0], ('next', '0'))
