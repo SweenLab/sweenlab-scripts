@@ -2,6 +2,14 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.15 — 2026-10-28
+
+- Single-choice selections immediately move focus to Next after Space or Enter selects a row. Press Enter again to continue. Applies to bridge, IPv4/IPv6 modes, storage and template selectors.
+- Required-selection hard stops and Back editing remain. Multiple-choice package/device/Tailscale checklists keep list focus for additional selections.
+- Updated README, guide and immutable launcher.
+
+Validation: Bash syntax and all 43 local tests pass, including Space/Enter selecting and focusing Next, changing a selection via Up, and rejecting an unselected choice. Live Proxmox provisioning has not been repeated for this navigation change.
+
 ## Debian LXC Wizard 0.1.14 — 2026-10-28
 
 - Extended explicit single-choice selectors to network bridge, IPv4 mode, IPv6 mode and downloaded Debian template, matching storage. Highlighting alone does not select; Space/Enter selects, then Next continues.
