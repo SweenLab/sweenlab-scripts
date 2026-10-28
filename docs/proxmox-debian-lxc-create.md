@@ -2,9 +2,9 @@
 
 Version 0.1.1 (initial test build). A step-by-step Debian LXC wizard with selectable packages and explicit container feature and device choices. Live Proxmox testing is still required.
 
-## Single-file launcher
+## Quick Start: copy and paste
 
-Paste this in the Proxmox host shell as root:
+Use the copy button in the top-right corner of the command block below, then paste the command into your **Proxmox node shell as root**. No cloning or companion file is needed:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/main/scripts/proxmox-debian-lxc-create.sh)"
@@ -40,7 +40,7 @@ Choose Cancel or Esc on an input/menu to stop. No at final confirmation exits wi
 2. Open the Proxmox node shell as root.
 3. Use a terminal at least 80 columns by 24 rows.
 4. Make sure `whiptail`, `python3`, and the normal Proxmox tools are available. The script reports missing dependencies; it never installs host packages automatically.
-5. Paste the single-file launch command above.
+5. Copy and paste the command from [Quick Start](#quick-start-copy-and-paste).
 6. Use a new disposable container ID. First test cancellation at the final review, then rerun to create the disposable CT.
 7. For Docker, select Compose, unprivileged mode, nesting and keyctl. Validate inside the CT:
 

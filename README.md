@@ -36,11 +36,11 @@ The installer is embedded in this single script and runs inside the new containe
 - Optional git, curl, wget, Tailscale, Docker Engine, Docker Compose and useful utilities.
 - Explicit nesting, keyctl, FUSE, TUN and GPU device choices.
 - Official package repositories, signed packages, rerunnable tool installation and logs.
-- No downloaded shell scripts are executed automatically.
+- No additional installer shell scripts are downloaded or executed.
 
 ## Quick Start
 
-Paste this into the Proxmox node shell as root:
+Use the copy button on the command block below, then paste it into your **Proxmox node shell as root**:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/main/scripts/proxmox-debian-lxc-create.sh)"
