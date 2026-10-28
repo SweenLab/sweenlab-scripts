@@ -2,6 +2,18 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.6 — 2026-10-28
+
+- Added readable orange/green terminal accents with monochrome fallback, concise installation stages, and an optional verbose-output screen. Quiet mode retains full command output in the private log and shows failure details.
+- Static address entry starts blank when switching from DHCP/manual; Back retains an accepted static address.
+- Added package Select all / clear all and Python 3 with pip and venv.
+- FUSE and GPU passthrough now start at No; nesting, keyctl, TUN and boot defaults are preserved.
+- Added an editable UTF-8 guest locale, generated and set during installation.
+- Removed the Tailscale QR choice; sign-in uses an open/copy/paste link, excluded from logs.
+- Updated README, guide, and immutable launcher.
+
+Validation: all 26 local tests pass, including theme initialization, bulk selection, blank static entry, locale handoff, defaults, link-only sign-in, quiet/verbose output and failure preservation. Host and embedded guest Bash syntax pass. This release has not yet been tested end-to-end on a live Proxmox host.
+
 ## Debian LXC Wizard 0.1.5 — 2026-10-28
 
 - Fixed the wizard's private `umask 077` leaking into Proxmox commands. Container commands now use a scoped `022` mask so newly created CT paths can be traversed by mapped container root; private wizard files keep their restrictive permissions.

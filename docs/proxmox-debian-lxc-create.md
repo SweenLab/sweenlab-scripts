@@ -1,16 +1,16 @@
 # SweenLab Debian LXC Creation Wizard
 
-Version 0.1.5 (initial test build). One self-contained script, fully step by step, with Back navigation and a final Create/Abort review. Live Proxmox testing is still required.
+Version 0.1.6 (initial test build). One self-contained script, fully step by step, with Back navigation and a final Create/Abort review. Live Proxmox testing is still required.
 
 ## Quick Start: copy and paste
 
 Use the copy button in the top-right corner of this block, then paste into your **Proxmox node shell as root**:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/f276e03a472971e2b7979b801abbb2c4851a0297/scripts/proxmox-debian-lxc-create.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/f0bb1169bdb0e2a969448b2f90eb0a32c1a87a87/scripts/proxmox-debian-lxc-create.sh)"
 ```
 
-The command is pinned to the verified version 0.1.5 script to avoid stale raw GitHub main-branch downloads. No clone, companion file, or additional shell-script download is needed.
+The command is pinned to the verified version 0.1.6 script to avoid stale raw GitHub main-branch downloads. No clone, companion file, or additional shell-script download is needed.
 
 If an older wizard is still open, abort it and restart with this command. Use a new disposable CT ID for the first test. Do not reuse an ID left by a failed creation until its state has been inspected.
 
@@ -24,7 +24,7 @@ If an older wizard is still open, abort it and restart with this command. Use a 
 
 ## Moving through the wizard
 
-Every configuration screen has **Back** and **Abort**. Input, menu, and package screens show **Back / Next / Abort**. Yes/No screens show **Back / Yes / No / Abort** horizontally, with Yes initially highlighted. The final overview shows **Back / Create / Abort**, with Create highlighted.
+Every configuration screen has **Back** and **Abort**. Input, menu, and package screens show **Back / Next / Abort**. Yes/No screens show **Back / Yes / No / Abort** horizontally, with Yes initially highlighted except FUSE, GPU passthrough and verbose output, which start at No. The final overview shows **Back / Create / Abort**, with Create highlighted.
 
 - Use Up/Down to select a menu item.
 - Use Space to toggle package or Tailscale checkboxes.
@@ -35,20 +35,23 @@ Every configuration screen has **Back** and **Abort**. Input, menu, and package 
 
 After Create, provisioning begins and Back navigation ends. Failures preserve any remaining new CT/storage state for inspection; the wizard never destroys it automatically.
 
+The UI uses orange headings, soft green selections, and neutral body text. Terminals without color support fall back to monochrome; `NO_COLOR=1` also disables color.
+
 ## Configuration screens
 
 1. **Container details:** unused cluster-wide ID, blank required hostname, and optional tags separated by semicolons.
-2. **Networking:** choose an active configured Proxmox Linux bridge. Choices show only names such as `vmbr0` and `vmbr1`; Docker and temporary firewall bridges are hidden. Choose IPv4/IPv6 mode, addresses/gateways where relevant, VLAN, MTU, optional MAC/rate limit, DNS and search domain.
+2. **Networking:** choose an active configured Proxmox Linux bridge. Choices show only names such as `vmbr0` and `vmbr1`; Docker and temporary firewall bridges are hidden. Choose IPv4/IPv6 mode (switching to static starts with a blank address field), addresses/gateways where relevant, VLAN, MTU, optional MAC/rate limit, DNS and search domain.
 3. **Resources:** CPU cores, memory in MiB, root disk size in GiB, and container storage. Storage choices show names only.
-4. **Timezone:** automatically prefilled from the Proxmox host's timezone; edit if needed. If the host timezone cannot be resolved, UTC is shown.
+4. **Timezone and locale:** Choose a guest UTF-8 locale (prefilled as `en_US.UTF-8`); it is generated and set as the guest default. Timezone is automatically prefilled from the Proxmox host's timezone; edit if needed. If the host timezone cannot be resolved, UTC is shown.
 5. **Access:** unprivileged mode is initially Yes. Choose an optional host SSH public-key file. Enter and confirm a mandatory root console password. Passwords remain hidden and are never logged or included in command arguments. Setting a console password does not enable root password login over SSH.
 6. **Downloaded templates:** select template storage, then one of the Debian templates already downloaded there. There is no catalog refresh, separate Debian-release chooser, or automatic template download. If the selected storage has none, Back selects another storage; Abort lets you download a template in Proxmox first.
-7. **Packages:** git, curl, wget, Tailscale, Docker Engine/Buildx, Docker Compose (includes Engine), nano, jq, unzip, ping, OpenSSH server, and sudo. Packages are initially unselected. htop, vim-tiny, tmux, rsync, and dnsutils are no longer choices.
+7. **Packages:** git, curl, wget, Tailscale, Docker Engine/Buildx, Docker Compose (includes Engine), nano, jq, unzip, ping, OpenSSH server, sudo, and Python 3 (with pip and venv). Packages are initially unselected. Select all / clear all toggles every package; individual choices remain editable. htop, vim-tiny, tmux, rsync, and dnsutils are no longer choices.
 8. **Tailscale:** when selected, choose whether to start sign-in automatically and configure its options (details below).
-9. **Features:** nesting, keyctl for unprivileged containers, FUSE, and TUN use horizontal Yes/No controls. Yes is initially selected. Docker requires nesting and keyctl in unprivileged mode; Tailscale requires TUN. Invalid combinations cannot continue.
-10. **GPU:** shown only when GPU nodes exist. Choose whether to pass them through, then select individual devices. There is no arbitrary additional-character-device question or numeric guest-group prompt.
+9. **Features:** nesting, keyctl for unprivileged containers, FUSE, and TUN use horizontal Yes/No controls. Nesting, keyctl and TUN start at Yes; FUSE starts at No because most installs do not need it and it can complicate freezing/backups. Docker requires nesting and keyctl in unprivileged mode; Tailscale requires TUN. Invalid combinations cannot continue.
+10. **GPU:** shown only when GPU nodes exist. Passthrough starts at No. Choose Yes to select individual devices. There is no arbitrary additional-character-device question or numeric guest-group prompt.
 11. **Start at host boot:** Yes is initially selected. Startup order and delays use Proxmox defaults.
-12. **Overview:** a grouped summary of container, resources, networking, software/features, and automatic settings. Choose Create or Abort, or Back to revise settings.
+12. **Installation output:** verbose output starts at No. Quiet mode shows concise stage progress and keeps full output in the private log; failures show the last 30 lines. Yes streams the full installation output.
+13. **Overview:** a grouped summary of container, resources, networking, software/features, and automatic settings. Choose Create or Abort, or Back to revise settings.
 
 The UI no longer presents the old numbered template-catalog or package-upgrade steps.
 
@@ -75,7 +78,7 @@ These are applied in the background and shown in the overview:
 | CPU limit / weight | `0` (unlimited) / `100` |
 | Swap | 512 MiB |
 | Package upgrades | Always enabled inside the new Debian CT |
-| Guest locale | `en_US.UTF-8` |
+| Guest locale | Selected in the wizard; initially `en_US.UTF-8` |
 | Passed device UID/GID / permissions | `0:0`, `0660` |
 | Startup order / delays | Proxmox defaults |
 | Deletion protection | Off |
@@ -92,9 +95,8 @@ When Tailscale is selected, **Run tailscale up automatically** starts as Yes. A 
 | Keep existing DNS | Selected | `--accept-dns=false` |
 | Accept advertised subnet routes | Unselected | `--accept-routes=true` if selected |
 | Block incoming Tailscale connections | Unselected | `--shields-up=true` if selected |
-| Display login QR code | Selected | `--qr=true` |
 
-After package installation, the wizard runs `tailscale up` with explicit values for these flags and a 120-second timeout. The login URL/QR is shown only on the terminal, outside the host run log. **You still need to authenticate in your browser.** No auth key is requested or stored.
+After package installation, the wizard runs `tailscale up` with explicit values for these flags and a 120-second timeout. QR codes are disabled (`--qr=false`); open or copy/paste the login link. The link is shown only on the terminal, outside the host run log. **You still need to authenticate in your browser.** No auth key is requested or stored.
 
 If authentication times out or fails, the created CT and installed packages remain. The wizard prints a retry command using your chosen flags and clearly reports sign-in as incomplete. You can also choose No to automatic sign-in and run it later yourself.
 
@@ -110,7 +112,7 @@ tar: /var/lib/lxc/204/rootfs: Cannot open: Permission denied
 
 occurs inside Proxmox's template extraction, before guest setup. The wizard through version 0.1.4 passed its private-file `umask 077` to Proxmox. Proxmox's directory creation respects that mask, producing `0700` CT directories that mapped container root (host UID 100000) cannot traverse. This matches the reported root-owned `0700` directories.
 
-Version 0.1.5 runs Proxmox container commands in a subshell with `umask 022`, while logs and UI files retain their private mask. A regression test reproduces the old `0700` behavior with Perl's `File::Path::make_path` and verifies the corrected `0755` directories, private `0600` log files, and command status preservation. This has not yet been validated by creating a container on a live Proxmox host.
+Version 0.1.6 runs Proxmox container commands in a subshell with `umask 022`, while logs and UI files retain their private mask. A regression test reproduces the old `0700` behavior with Perl's `File::Path::make_path` and verifies the corrected `0755` directories, private `0600` log files, and command status preservation. This has not yet been validated by creating a container on a live Proxmox host.
 
 Choose a fresh unused CT ID for the next test. The wizard rejects IDs with leftover `/var/lib/lxc/ID` directories or symlinks, even when no CT configuration exists. Existing failed directories and disks are left untouched for separate inspection. The read-only mapped-root traversal preflight remains in place.
 
@@ -137,7 +139,7 @@ The embedded guest installer stays at `/root/sweenlab-debian-tools.sh` in the ne
 
 ```bash
 pct enter YOUR_CTID
-bash /root/sweenlab-debian-tools.sh --timezone America/New_York --upgrade 1 git curl compose tailscale
+bash /root/sweenlab-debian-tools.sh --timezone America/New_York --locale en_US.UTF-8 --upgrade 1 git curl compose tailscale
 ```
 
 That retry example applies only after the CT has been created and the installer copied successfully. It cannot fix template-extraction errors. Re-running APT installs can install newer available versions; Docker data and Tailscale identity are preserved.
