@@ -28,6 +28,7 @@ class WorkflowTests(unittest.TestCase):
             env = dict(os.environ, FIXTURE=str(d), SCENARIO=scenario)
             code = '''source "$FIXTURE/wizard.sh"
 gpu_names=''
+[[ $SCENARIO != gpu-required ]] || gpu_names=/dev/dri/renderD128
 UI_DIR=$FIXTURE/ui; mkdir -p "$UI_DIR"
 nproc() { echo 8; }
 dpkg() { echo amd64; }
@@ -63,7 +64,7 @@ pct() {
     if [[ "$1" == exec && "$*" == *'bash /root/sweenlab-debian-tools.sh'* && "$SCENARIO" == installer-fail ]]; then return 42; fi
     return 0
 }
-visits_memory=0; visits_disk=0; visits_review=0; visits_password=0; visits_hostname=0; visits_selected=0
+visits_memory=0; visits_disk=0; visits_review=0; visits_password=0; visits_hostname=0; visits_selected=0; visits_ipmode=0; visits_gpu=0
 ui() {
     printf '%s|%s|seed=%s|error=%s\\n' "$key" "$1" "$([[ "$key" == password* ]] && echo HIDDEN || printf '%s' "$4")" "$error" >> "$FIXTURE/trace"
     UI_ACTION=next; UI_VALUE=$4
@@ -75,7 +76,10 @@ ui() {
         hostname) visits_hostname=$((visits_hostname+1)); UI_VALUE=test-debian
             if [[ "$SCENARIO" == mandatory && "$visits_hostname" == 1 ]]; then UI_VALUE=''; fi;;
         bridge) UI_VALUE=vmbr0;;
-        ipmode) UI_VALUE=static;;
+        ipmode) visits_ipmode=$((visits_ipmode+1)); UI_VALUE=static; if [[ $SCENARIO == missing-network && $visits_ipmode == 1 ]]; then UI_VALUE=''; fi;;
+        ip6mode) UI_VALUE=manual;;
+        gpu) UI_VALUE=1;;
+        gpu_selected) visits_gpu=$((visits_gpu+1)); if (( visits_gpu == 1 )); then UI_VALUE=''; else UI_VALUE=/dev/dri/renderD128; fi;;
         gateway) UI_VALUE=10.10.10.1;;
         root_store) UI_VALUE=storage4tb;;
         template_store) UI_VALUE=local;;
@@ -138,6 +142,10 @@ configure
         calls = files['calls']
         self.assertIn('<--cpulimit> <0> <--cpuunits> <100>', calls)
         self.assertIn('<--swap> <512>', calls)
+        for key in ('bridge', 'ipmode', 'ip6mode', 'root_store', 'template_store', 'template'):
+            self.assertIn(key + '|select|', files['trace'])
+        self.assertIn('ipmode|select|seed=|', files['trace'])
+        self.assertIn('ip6mode|select|seed=|', files['trace'])
         self.assertIn('<--rootfs> <storage4tb:10>', calls)
         self.assertIn('<--onboot> <1> <--protection> <0>', calls)
         self.assertNotIn('<--startup>', calls)
@@ -178,6 +186,18 @@ configure
         summary = logs.split('── Completed', 1)[1]
         self.assertIn('⚠ Tailscale sign-in is incomplete.', summary)
         self.assertNotIn('✅ Tailscale sign-in completed', summary)
+
+    def test_missing_network_mode_is_rejected_before_continuing(self):
+        result, files = self.exercise('missing-network')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Select an IPv4 mode.', files['trace'])
+        self.assertEqual(files['trace'].count('ipmode|select|'), 2)
+
+    def test_enabling_gpu_requires_a_device(self):
+        result, files = self.exercise('gpu-required')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Select at least one GPU device', files['trace'])
+        self.assertIn('/dev/dri/renderD128', files['review'])
 
     def test_namespace_failure_happens_before_pct_create(self):
         result, files = self.exercise('namespace-fail', execute=True)

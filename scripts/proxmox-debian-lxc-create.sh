@@ -2,7 +2,7 @@
 # SweenLab Debian LXC Creation Wizard — MIT
 # https://github.com/SweenLab/personal-proxmox-scripts
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.13
+SCRIPT_VERSION=0.1.14
 COMPLETED=()
 CTID='' CREATED=0 LOG='' TMP='' UI_DIR='' UI_ACTION='' UI_VALUE=''
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
@@ -156,7 +156,7 @@ PLAN
 }
 configure() {
     ctid=$(pvesh get /cluster/nextid)
-    hostname='' tags='' bridge='' ipmode=dhcp ip='' gateway='' ip6mode=manual ip6='' gateway6=''
+    hostname='' tags='' bridge='' ipmode='' ip='' gateway='' ip6mode='' ip6='' gateway6=''
     vlan='' mtu=1500 mac='' rate='' dns='' search='' cores=2 memory=1024 disk=10 root_store=''
     tz=$(host_timezone); unpriv=1 keyfile='' password='' password_confirm='' template_store='' template=''
     selected='' ts_up=1 ts_options=$'ssh\nignore-dns' nesting=1 keyctl=1 fuse=0 tun=1 gpu=0 gpu_selected='' onboot=1
@@ -184,14 +184,14 @@ configure() {
             hostname) prompt='Hostname (required; starts blank)' ;;
             tags) prompt=$'Tags separated by semicolons; leave blank for none.\n\nTags are case-sensitive: TEST and test are different tags.\nMatch the exact capitalization of your predefined Proxmox tags.' ;;
             bridge)
-                kind=menu; title='Network bridge'; prompt='Choose the bridge for this container.'
+                kind=select; title='Network bridge'; prompt='Choose the bridge for this container.'
                 names=$(configured_linux_bridges)
                 while IFS= read -r line; do [[ -z "$line" ]] || options+=("$line" ''); done <<< "$names"
                 if ((${#options[@]} == 0)); then kind=notice; prompt='No active configured Proxmox Linux bridge is available. Apply its network configuration, then restart the wizard.'; fi;;
-            ipmode) kind=menu; title='IPv4'; prompt='How should IPv4 be configured?'; options=(dhcp 'DHCP' static 'Static address' manual 'No automatic IPv4');;
+            ipmode) kind=select; title='IPv4'; prompt='How should IPv4 be configured?'; options=(dhcp 'DHCP' static 'Static address' manual 'No automatic IPv4');;
             ip) title='IPv4 address'; prompt='IPv4 address/prefix, for example 10.10.10.204/24';;
             gateway) title='IPv4 gateway'; prompt='IPv4 gateway; leave blank for none';;
-            ip6mode) kind=menu; title='IPv6'; prompt='How should IPv6 be configured?'; options=(manual 'No automatic IPv6' auto 'SLAAC' dhcp 'DHCPv6' static 'Static address');;
+            ip6mode) kind=select; title='IPv6'; prompt='How should IPv6 be configured?'; options=(manual 'No automatic IPv6' auto 'SLAAC' dhcp 'DHCPv6' static 'Static address');;
             ip6) title='IPv6 address'; prompt='IPv6 address/prefix';;
             gateway6) title='IPv6 gateway'; prompt='IPv6 gateway; leave blank for none';;
             cores) title='CPU cores'; prompt='Number of CPU cores';;
@@ -211,7 +211,7 @@ configure() {
             password) seed=''; kind=password; title='Root password'; prompt='Enter the required root console password (hidden).';;
             password_confirm) seed=''; kind=password; title='Confirm password'; prompt='Re-enter the root password (hidden).';;
             template)
-                kind=menu; title='Downloaded Debian template'; prompt='Choose a template already downloaded on this storage.'
+                kind=select; title='Downloaded Debian template'; prompt='Choose a template already downloaded on this storage.'
                 names=$(list_downloaded_templates "$template_store" "$arch")
                 while IFS= read -r line; do [[ -z "$line" ]] || options+=("$line" "${line##*/}"); done <<< "$names"
                 if ((${#options[@]} == 0)); then kind=notice; prompt='No downloaded Debian 12/13 template for this host architecture was found here. Back selects another storage; Abort lets you download a template in Proxmox first.'; fi;;
@@ -235,7 +235,7 @@ configure() {
         esac
         [[ -z "$error" ]] || prompt=$'Please correct: '"$error"$'\n\n'"$prompt"
         case "$key" in
-            ctid|hostname|bridge|ipmode|ip|ip6mode|ip6|cores|memory|disk|root_store|tz|locale_name|password|password_confirm|template_store|template|selected) title+=" (required)";;
+            ctid|hostname|bridge|ipmode|ip|ip6mode|ip6|cores|memory|disk|root_store|tz|locale_name|password|password_confirm|template_store|template|selected|gpu_selected) title+=" (required)";;
         esac
         ui "$kind" "$title" "$prompt" "$seed" ${options[@]+"${options[@]}"}
         case "$UI_ACTION" in
@@ -260,8 +260,8 @@ configure() {
             hostname) [[ ${#hostname} -le 63 && "$hostname" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]] || error='Hostname is required; use a single valid DNS label.';;
             tags) [[ -z "$tags" || "$tags" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.+-]*(\;[a-zA-Z0-9_][a-zA-Z0-9_.+-]*)*$ ]] || error='Use valid tags separated by semicolons.';;
             bridge|root_store|template_store|template) contains_line "${!key}" "$names" || error='Choose an item from the list.';;
-            ipmode) if [[ $ipmode == static && ( $ip == dhcp || $ip == manual ) ]]; then ip=''; fi;;
-            ip6mode) if [[ $ip6mode == static && ( $ip6 == dhcp || $ip6 == manual || $ip6 == auto ) ]]; then ip6=''; fi;;
+            ipmode) [[ $ipmode == dhcp || $ipmode == static || $ipmode == manual ]] || error='Select an IPv4 mode.'; if [[ $ipmode == static && ( $ip == dhcp || $ip == manual ) ]]; then ip=''; fi;;
+            ip6mode) [[ $ip6mode == manual || $ip6mode == auto || $ip6mode == dhcp || $ip6mode == static ]] || error='Select an IPv6 mode.'; if [[ $ip6mode == static && ( $ip6 == dhcp || $ip6 == manual || $ip6 == auto ) ]]; then ip6=''; fi;;
             locale_name) [[ $locale_name == C.UTF-8 || $locale_name =~ ^[a-zA-Z]{2,3}_[a-zA-Z]{2}\.UTF-8$ ]] || error='Enter a UTF-8 locale such as en_US.UTF-8.';;
             ip) validate_ip 4 "$ip" || error='Enter IPv4 with a prefix length.';;
             gateway) [[ -z "$gateway" ]] || validate_address 4 "$gateway" || error='Invalid IPv4 gateway.';;
@@ -287,6 +287,7 @@ configure() {
             keyctl) (( docker == 0 || keyctl == 1 )) || error='Unprivileged Docker requires keyctl.';;
             tun) if (( tun )); then [[ -c /dev/net/tun ]] || error='The host TUN device is missing.'; elif (( tailscale )); then error='Tailscale requires TUN.'; fi;;
             gpu_selected)
+                [[ -n $gpu_selected ]] || error='Select at least one GPU device, or use Back to disable GPU passthrough.'
                 gpu_display=${gpu_selected//$'\n'/, }
                 while IFS= read -r line; do [[ -z "$line" ]] || contains_line "$line" "$gpu_names" || error='Unknown GPU device.'; done <<< "$gpu_selected";;
         esac
@@ -676,6 +677,7 @@ def run(screen, kind, title, prompt, seed, options):
                     selection_error = ''
                     continue
                 if key == ' ' and kind == 'check' and options:
+                    selection_error = ''
                     tag = options[row][0]
                     if tag == '__all__':
                         all_tags = set(tags) - {'__all__', '__none__'}
@@ -714,13 +716,17 @@ def run(screen, kind, title, prompt, seed, options):
                 return action, text
             if kind == 'select':
                 if choice not in tags:
-                    selection_error = 'Select one storage option before continuing.'
+                    selection_error = 'Select one option before continuing.'
                     focus = 'content'
                     continue
                 return action, choice
             if kind == 'menu':
                 return action, tags[row] if tags else ''
             if kind == 'check':
+                if '(required)' in title and not any(tag in selected for tag in tags if tag != '__all__'):
+                    selection_error = 'Select at least one option before continuing.'
+                    focus = 'content'
+                    continue
                 return action, '\n'.join(tag for tag in tags if tag in selected and tag != '__all__')
             return action, ''
 
