@@ -43,16 +43,16 @@ The installer is embedded in this single script and runs inside the new containe
 Use the copy button on the command block below, then paste it into your **Proxmox node shell as root**:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/main/scripts/proxmox-debian-lxc-create.sh)"
+bash -c "$(curl -fsSL "https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/main/scripts/proxmox-debian-lxc-create.sh?nocache=$(date +%s)")"
 ```
 
-This downloads and runs the SweenLab wizard. All menus and the final creation confirmation remain interactive. The guest installer is embedded; no companion file or additional shell script download is required.
+The timestamp in the download URL avoids a stale cached copy after an update. This downloads and runs the SweenLab wizard. All menus and the final creation confirmation remain interactive. The guest installer is embedded; no companion file or additional shell script download is required.
 
 For a first test, choose a new disposable container ID. Follow the [step-by-step guide](docs/proxmox-debian-lxc-create.md) for prerequisites, passthrough permissions, retries and testing. You can inspect the script on GitHub before running it.
 
 ## Testing Status
 
-Version 0.1.1 is an initial test build. Bash syntax and simulated workflow checks pass; live Proxmox, Docker, Tailscale and GPU validation is still required. Start with a disposable container.
+Version 0.1.2 is an initial test build. Bash syntax and simulated workflow checks pass; live Proxmox, Docker, Tailscale and GPU validation is still required. Start with a disposable container.
 
 ## Documentation
 

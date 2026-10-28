@@ -4,7 +4,7 @@
 # License: MIT
 # Run the reviewed local file on a Proxmox VE host, as root.
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.1
+SCRIPT_VERSION=0.1.2
 INSTALLER=''
 CTID='' CREATED=0 LOG='' TMP=''
 DIALOG_HEIGHT=20 DIALOG_WIDTH=76 LIST_HEIGHT=11

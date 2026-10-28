@@ -1,14 +1,16 @@
 # SweenLab Debian LXC Creation Wizard
 
-Version 0.1.1 (initial test build). A step-by-step Debian LXC wizard with selectable packages and explicit container feature and device choices. Live Proxmox testing is still required.
+Version 0.1.2 (initial test build). A step-by-step Debian LXC wizard with selectable packages and explicit container feature and device choices. Live Proxmox testing is still required.
 
 ## Quick Start: copy and paste
 
 Use the copy button in the top-right corner of the command block below, then paste the command into your **Proxmox node shell as root**. No cloning or companion file is needed:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/main/scripts/proxmox-debian-lxc-create.sh)"
+bash -c "$(curl -fsSL "https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/main/scripts/proxmox-debian-lxc-create.sh?nocache=$(date +%s)")"
 ```
+
+The timestamp in the command requests a fresh download when the raw GitHub link has a stale cached copy.
 
 The wizard contains its guest setup code. After final confirmation it writes that embedded code to a temporary host file, copies it into the newly created CT, runs it there, and removes the temporary host file on exit. The saved copy inside the CT supports reviewed retries. No second script is fetched from the internet.
 
