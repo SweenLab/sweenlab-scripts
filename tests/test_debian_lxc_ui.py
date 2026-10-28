@@ -99,7 +99,7 @@ class TerminalUiTests(unittest.TestCase):
              patch.object(curses, 'COLORS', 256, create=True), patch.object(curses, 'init_pair') as pairs, \
              patch.object(curses, 'color_pair', return_value=0):
             self.ui.run(screen, 'yesno', 'Test', 'Question', '1', [])
-        self.assertEqual([call.args for call in pairs.call_args_list], [(1, 208, -1), (2, 114, -1), (3, curses.COLOR_BLACK, 114), (4, 252, -1)])
+        self.assertEqual([call.args for call in pairs.call_args_list], [(1, 208, -1), (2, 114, -1), (3, curses.COLOR_BLACK, 114), (4, 252, -1), (5, 252, 236)])
 
     def test_arrow_only_input_navigation_and_cursor_editing(self):
         keys = [curses.KEY_LEFT, 'X', curses.KEY_DOWN, curses.KEY_LEFT, '\n']
@@ -152,7 +152,9 @@ class TerminalUiTests(unittest.TestCase):
         screen = Screen(['\n'])
         with patch.object(curses, 'curs_set'), patch.object(curses, 'has_colors', return_value=False):
             self.ui.run(screen, 'input', 'Test', 'Question', 'text', [])
-        self.assertFalse(any(value.isspace() and len(value) > 10 for _, _, value, _ in screen.positions))
+        fields = [value for _, _, value, _ in screen.positions if value.startswith('[ ') and value.endswith(' ]')]
+        self.assertTrue(fields)
+        self.assertTrue(all(len(value) == 52 for value in fields))
 
     def test_review_uses_fixed_label_and_value_columns_and_scroll_count(self):
         prompt = 'CONTAINER\n  ID / name       204 / test\n  Tags            TEST\n\nRESOURCES\n  Root disk       local · 10 GiB'
@@ -165,6 +167,15 @@ class TerminalUiTests(unittest.TestCase):
         self.assertEqual(len(set(values)), 1)
         self.assertGreater(values[0], labels[0])
         self.assertTrue(any('1-6/6' in value for value in screen.drawn))
+
+    def test_empty_input_and_password_have_persistent_centered_boxes(self):
+        for kind in ('input', 'password'):
+            screen = Screen(['\t', '\t', '\n'])
+            with patch.object(curses, 'curs_set'), patch.object(curses, 'has_colors', return_value=False):
+                self.ui.run(screen, kind, 'Required', 'Enter a value', '', [])
+            fields = [(x, value) for _, x, value, _ in screen.positions if value.startswith('[ ') and value.endswith(' ]')]
+            self.assertGreaterEqual(len(fields), 3)
+            self.assertEqual(set(fields), {((89 - 52) // 2, '[ ' + ' ' * 48 + ' ]')})
 
     def test_no_default_for_optional_features(self):
         self.assertEqual(self.drive('yesno', ['\n'], '0')[0], ('next', '0'))

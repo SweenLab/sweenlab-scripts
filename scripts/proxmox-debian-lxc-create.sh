@@ -2,7 +2,7 @@
 # SweenLab Debian LXC Creation Wizard — MIT
 # https://github.com/SweenLab/personal-proxmox-scripts
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.11
+SCRIPT_VERSION=0.1.12
 COMPLETED=()
 CTID='' CREATED=0 LOG='' TMP='' UI_DIR='' UI_ACTION='' UI_VALUE=''
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
@@ -511,7 +511,7 @@ def review_rows(prompt, width):
 def run(screen, kind, title, prompt, seed, options):
     curses.curs_set(0)
     screen.keypad(True)
-    accent = success = highlight = body = 0
+    accent = success = highlight = body = field = 0
     try:
         if curses.has_colors() and not os.environ.get('NO_COLOR'):
             curses.start_color()
@@ -520,7 +520,8 @@ def run(screen, kind, title, prompt, seed, options):
             curses.init_pair(2, 114 if curses.COLORS >= 256 else curses.COLOR_GREEN, -1)
             curses.init_pair(3, curses.COLOR_BLACK, 114 if curses.COLORS >= 256 else curses.COLOR_GREEN)
             curses.init_pair(4, 252 if curses.COLORS >= 256 else curses.COLOR_WHITE, -1)
-            accent, success, highlight, body = (curses.color_pair(i) for i in (1, 2, 3, 4))
+            curses.init_pair(5, 252 if curses.COLORS >= 256 else curses.COLOR_WHITE, 236 if curses.COLORS >= 256 else curses.COLOR_BLACK)
+            accent, success, highlight, body, field = (curses.color_pair(i) for i in (1, 2, 3, 4, 5))
             screen.bkgd(' ', body)
     except curses.error:
         pass
@@ -585,10 +586,12 @@ def run(screen, kind, title, prompt, seed, options):
             content_y = prompt_y + 1 + min(len(lines), 8)
             if kind in ('input', 'password'):
                 shown = '*' * len(text) if kind == 'password' else text
-                field_width = width - 8
+                field_width = min(48, width - 12)
                 offset = max(0, cursor - field_width + 1)
-                field_x = max(3, (width - min(len(shown[offset:]), field_width)) // 2)
-                box.addnstr(content_y, field_x, shown[offset:], field_width, ((highlight or curses.A_REVERSE) if focus == 'content' else success) | (curses.A_BOLD if required else 0))
+                field_left = (width - field_width - 4) // 2
+                field_x = field_left + 2
+                box.addnstr(content_y, field_left, '[ ' + ' ' * field_width + ' ]', field_width + 4, field)
+                box.addnstr(content_y, field_x, shown[offset:offset + field_width], field_width, field | (curses.A_BOLD if required else 0))
             elif kind in ('menu', 'check'):
                 visible = max(1, height - content_y - 5)
                 start = max(0, min(row - visible + 1, max(0, len(options) - visible)))
