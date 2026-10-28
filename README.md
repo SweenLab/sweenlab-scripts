@@ -38,6 +38,7 @@ The installer is embedded in this single script and runs inside the new containe
 - Mandatory root password, host-derived timezone, memory conversion chart and already-downloaded Debian templates.
 - Optional automatic Tailscale sign-in with SSH/DNS/route settings and a browser login link.
 - Correct Proxmox directory creation permissions, private logs, read-only extraction diagnostics.
+- Simplified networking with background defaults and arrow-key navigation between fields, lists and buttons.
 - Select all/clear all packages, optional Python 3/pip/venv, editable locale, and quiet or verbose installation progress.
 - Official package repositories, signed packages, rerunnable tool installation and logs.
 - No additional installer shell scripts are downloaded or executed.
@@ -47,16 +48,16 @@ The installer is embedded in this single script and runs inside the new containe
 Use the copy button on the command block below, then paste it into your **Proxmox node shell as root**:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/0d5232fe01f3f8bdb117b44d6c14ebad2eadb002/scripts/proxmox-debian-lxc-create.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/ced70648f4dfb039a8de128110b0eec7ce7c4ebf/scripts/proxmox-debian-lxc-create.sh)"
 ```
 
-This command is pinned to version 0.1.7 so it does not depend on a cached main-branch download. This downloads and runs the SweenLab wizard. Back preserves your entries; the final Create action begins provisioning. The guest installer is embedded; no companion file or additional shell script download is required.
+This command is pinned to version 0.1.8 so it does not depend on a cached main-branch download. This downloads and runs the SweenLab wizard. Back preserves your entries; the final Create action begins provisioning. The guest installer is embedded; no companion file or additional shell script download is required.
 
 For a first test, choose a new disposable container ID. Follow the [step-by-step guide](docs/proxmox-debian-lxc-create.md) for prerequisites, passthrough permissions, retries and testing. You can inspect the script on GitHub before running it.
 
 ## Testing Status
 
-Version 0.1.7 is an initial test build. Bash syntax and simulated workflow checks pass; live Proxmox, Docker, Tailscale and GPU validation is still required. Start with a disposable container.
+Version 0.1.8 is an initial test build. Bash syntax and simulated workflow checks pass; live Proxmox, Docker, Tailscale and GPU validation is still required. Start with a disposable container.
 
 ## Documentation
 

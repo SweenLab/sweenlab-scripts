@@ -2,6 +2,14 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.8 — 2026-10-28
+
+- Removed VLAN, MTU, MAC, rate limit, DNS and search-domain screens. Apply untagged networking, MTU 1500, automatic MAC, no rate limit and inherited DNS/search settings in the background. Bridge, IPv4/IPv6 mode and relevant address/gateway screens remain.
+- Added arrow-only navigation between fields/lists and buttons. Text-field Left/Right cursor editing and review scrolling remain; Tab navigation is still supported.
+- Updated README, guide and immutable launcher.
+
+Validation: Bash syntax and all 27 local tests pass, including arrow-only navigation, cursor editing and background networking arguments. Live Proxmox testing of this version remains required.
+
 ## Debian LXC Wizard 0.1.7 — 2026-10-28
 
 - Removed the leftover-directory restriction from container ID selection and the equivalent pre-creation rejection. ID format validation and Proxmox checks for IDs already in use remain.
