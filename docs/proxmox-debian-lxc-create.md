@@ -94,6 +94,10 @@ Passed locally: Bash syntax, help output, numeric bounds and injection rejection
 
 Still required on a disposable real Proxmox CT: terminal interaction, template extraction, static/DHCP connectivity, vendor package downloads, repeat installation, Docker daemon/workloads, Tailscale authentication, GPU application access, and behavior with the actual host kernel/storage combination. This build is for review and live testing, not a production-tested release.
 
+## Release history
+
+Every user-visible update gets a new version and a GitHub release. See the [changelog](../CHANGELOG.md) and [release pages](https://github.com/SweenLab/personal-proxmox-scripts/releases) for the recorded changes and validation status.
+
 ## References
 
 - Existing project: https://github.com/SweenLab/personal-proxmox-scripts

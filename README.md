@@ -60,7 +60,7 @@ Version 0.1.2 is an initial test build. Bash syntax and simulated workflow check
 
 ## Releases
 
-Version history and release notes are available on the [Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Historical releases can contain tools no longer present on the main branch.
+Every tweak and update is recorded in the [changelog](CHANGELOG.md) and on the [Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Historical releases can contain tools no longer present on the main branch.
 
 ## Contributing
 
