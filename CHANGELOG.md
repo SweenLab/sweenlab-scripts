@@ -2,6 +2,13 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.9 — 2026-10-28
+
+- Added a case-sensitivity note to the tags screen: TEST and test are different tags. Match the exact capitalization of predefined Proxmox tags.
+- Updated the guide, README version and immutable launcher. Tag handling is unchanged.
+
+Validation: Bash syntax and diff checks pass. This wording-only update has not been live-tested on Proxmox.
+
 ## Debian LXC Wizard 0.1.8 — 2026-10-28
 
 - Removed VLAN, MTU, MAC, rate limit, DNS and search-domain screens. Apply untagged networking, MTU 1500, automatic MAC, no rate limit and inherited DNS/search settings in the background. Bridge, IPv4/IPv6 mode and relevant address/gateway screens remain.
