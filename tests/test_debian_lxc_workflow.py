@@ -138,7 +138,9 @@ configure
         self.assertIn('<--swap> <512>', calls)
         self.assertIn('<--onboot> <1> <--protection> <0>', calls)
         self.assertNotIn('<--startup>', calls)
-        self.assertIn('firewall=1', calls)
+        self.assertIn('firewall=1,mtu=1500', calls)
+        for argument in ('tag=', 'hwaddr=', 'rate=', '<--nameserver>', '<--searchdomain>'):
+            self.assertNotIn(argument, calls)
         self.assertIn('nesting=1,fuse=0,keyctl=1', calls)
         self.assertIn('path=/dev/net/tun,gid=0,uid=0,mode=0660', calls)
         self.assertIn('<--upgrade> <1>', calls)
@@ -152,8 +154,8 @@ configure
         self.assertNotIn('fixture-secret', logs)
         self.assertIn('pveam', SCRIPT.read_text())
         self.assertNotIn('Refresh the Proxmox template catalog', files['trace'])
-        for removed in ('cpulimit|', 'cpuunits|', 'swap|', 'protection|', 'startup|', 'upgrade|'):
-            self.assertNotIn(removed, files['trace'])
+        for removed in ('cpulimit|', 'cpuunits|', 'swap|', 'protection|', 'startup|', 'upgrade|', 'vlan|', 'mtu|', 'mac|', 'rate|', 'dns|', 'search|'):
+            self.assertNotIn('\n' + removed, '\n' + files['trace'])
 
     def test_namespace_failure_happens_before_pct_create(self):
         result, files = self.exercise('namespace-fail', execute=True)

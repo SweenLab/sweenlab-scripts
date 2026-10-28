@@ -97,6 +97,20 @@ class TerminalUiTests(unittest.TestCase):
             self.ui.run(screen, 'yesno', 'Test', 'Question', '1', [])
         self.assertEqual([call.args for call in pairs.call_args_list], [(1, 208, -1), (2, 114, -1), (3, curses.COLOR_BLACK, 114)])
 
+    def test_arrow_only_input_navigation_and_cursor_editing(self):
+        keys = [curses.KEY_LEFT, 'X', curses.KEY_DOWN, curses.KEY_LEFT, '\n']
+        self.assertEqual(self.drive('input', keys, 'ab')[0], ('back', ''))
+        keys = [curses.KEY_DOWN, curses.KEY_UP, curses.KEY_LEFT, 'X', '\n']
+        self.assertEqual(self.drive('input', keys, 'ab')[0], ('next', 'aXb'))
+
+    def test_arrow_only_list_and_button_navigation(self):
+        options = [('vmbr0', ''), ('vmbr1', '')]
+        self.assertEqual(self.drive('menu', [curses.KEY_DOWN, curses.KEY_DOWN, '\n'], '', options)[0], ('next', 'vmbr1'))
+        keys = [curses.KEY_RIGHT, curses.KEY_UP, curses.KEY_DOWN, '\n']
+        self.assertEqual(self.drive('menu', keys, '', options)[0], ('next', 'vmbr1'))
+        keys = [curses.KEY_RIGHT, curses.KEY_LEFT, '\n']
+        self.assertEqual(self.drive('check', keys, '', options)[0], ('back', ''))
+
     def test_no_default_for_optional_features(self):
         self.assertEqual(self.drive('yesno', ['\n'], '0')[0], ('next', '0'))
 

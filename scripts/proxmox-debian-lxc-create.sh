@@ -2,7 +2,7 @@
 # SweenLab Debian LXC Creation Wizard — MIT
 # https://github.com/SweenLab/personal-proxmox-scripts
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.7
+SCRIPT_VERSION=0.1.8
 CTID='' CREATED=0 LOG='' TMP='' UI_DIR='' UI_ACTION='' UI_VALUE=''
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 cleanup() {
@@ -141,7 +141,7 @@ configure() {
     selected='' ts_up=1 ts_options=$'ssh\nignore-dns' nesting=1 keyctl=1 fuse=0 tun=1 gpu=0 gpu_selected='' onboot=1
     locale_name=en_US.UTF-8 verbose=0
     docker=0 tailscale=0 packages_display='' gpu_display='' ts_flags_display=''
-    local -a steps=(ctid hostname tags bridge ipmode ip gateway ip6mode ip6 gateway6 vlan mtu mac rate dns search cores memory disk root_store tz locale_name unpriv keyfile password password_confirm template_store template selected ts_up ts_options nesting keyctl fuse tun gpu gpu_selected onboot verbose review)
+    local -a steps=(ctid hostname tags bridge ipmode ip gateway ip6mode ip6 gateway6 cores memory disk root_store tz locale_name unpriv keyfile password password_confirm template_store template selected ts_up ts_options nesting keyctl fuse tun gpu gpu_selected onboot verbose review)
     local index=0 direction=1 key kind title prompt seed error='' names='' line old_password='' arch
     local -a options=()
     arch=$(dpkg --print-architecture)
@@ -173,12 +173,6 @@ configure() {
             ip6mode) kind=menu; title='IPv6'; prompt='How should IPv6 be configured?'; options=(manual 'No automatic IPv6' auto 'SLAAC' dhcp 'DHCPv6' static 'Static address');;
             ip6) title='IPv6 address'; prompt='IPv6 address/prefix';;
             gateway6) title='IPv6 gateway'; prompt='IPv6 gateway; leave blank for none';;
-            vlan) title='VLAN'; prompt='VLAN tag; leave blank for untagged';;
-            mtu) title='MTU'; prompt='Network MTU';;
-            mac) title='MAC address'; prompt='Leave blank for Proxmox to generate a MAC address';;
-            rate) title='Network rate'; prompt='Network limit in MB/s; leave blank for unlimited';;
-            dns) title='DNS'; prompt='DNS server IP; leave blank to inherit the host configuration';;
-            search) title='DNS search'; prompt='Search domain; leave blank to inherit the host configuration';;
             cores) title='CPU cores'; prompt='Number of CPU cores';;
             memory) title='Memory'; prompt=$'Memory in MiB\n\nQuick conversion:\n  512 MiB = 0.5 GiB    1024 MiB = 1 GiB\n  2048 MiB = 2 GiB     4096 MiB = 4 GiB\n  8192 MiB = 8 GiB    16384 MiB = 16 GiB';;
             disk) title='Root disk'; prompt='Root disk size in GiB';;
@@ -249,12 +243,6 @@ configure() {
             gateway) [[ -z "$gateway" ]] || validate_address 4 "$gateway" || error='Invalid IPv4 gateway.';;
             ip6) validate_ip 6 "$ip6" || error='Enter IPv6 with a prefix length.';;
             gateway6) [[ -z "$gateway6" ]] || validate_address 6 "$gateway6" || error='Invalid IPv6 gateway.';;
-            vlan) [[ -z "$vlan" ]] || number "$vlan" 1 4094 || error='VLAN must be 1–4094.';;
-            mtu) number "$mtu" 576 9000 || error='MTU must be 576–9000.';;
-            mac) [[ -z "$mac" || "$mac" =~ ^([a-fA-F0-9]{2}:){5}[a-fA-F0-9]{2}$ ]] || error='Invalid MAC address.';;
-            rate) [[ -z "$rate" ]] || validate_rate "$rate" || error='Invalid network rate.';;
-            dns) [[ -z "$dns" ]] || python3 -c 'import ipaddress,sys; ipaddress.ip_address(sys.argv[1])' "$dns" 2>/dev/null || error='Invalid DNS server IP.';;
-            search) [[ -z "$search" || "$search" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || error='Invalid search domain.';;
             cores) number "$cores" 1 "$(nproc)" || error='Enter a valid core count for this host.';;
             memory) number "$memory" 256 1048576 || error='Memory must be at least 256 MiB.';;
             disk) number "$disk" 2 1048576 || error='Disk must be at least 2 GiB.';;
@@ -531,9 +519,9 @@ def run(screen, kind, title, prompt, seed, options):
         for idx, label in enumerate(labels):
             write(height - 4, x, label, (highlight or curses.A_REVERSE) | curses.A_BOLD if idx == button else accent)
             x += len(label) + 4
-        hint = 'Tab: buttons | Shift+Tab: previous | Esc: abort'
+        hint = 'Up/Down: field/buttons | Left/Right: edit/choose | Enter: confirm | Esc: abort'
         if kind == 'check':
-            hint = 'Space: select | Tab: buttons | Esc: abort'
+            hint = 'Arrows: navigate | Right: buttons | Space: select | Enter: next | Esc: abort'
         if kind == 'review':
             hint = 'Up/Down: scroll | Left/Right: buttons | Esc: abort'
         write(height - 2, 3, hint, curses.A_DIM)
@@ -564,13 +552,30 @@ def run(screen, kind, title, prompt, seed, options):
         if kind == 'review' and key in (curses.KEY_UP, curses.KEY_DOWN, curses.KEY_NPAGE, curses.KEY_PPAGE):
             scroll += {curses.KEY_UP: -1, curses.KEY_DOWN: 1, curses.KEY_NPAGE: 8, curses.KEY_PPAGE: -8}[key]
             continue
+        if kind in ('input', 'password', 'menu', 'check'):
+            if focus == 'buttons' and key == curses.KEY_UP:
+                focus = 'content'
+                continue
+            if focus == 'content' and kind in ('input', 'password') and key in (curses.KEY_UP, curses.KEY_DOWN):
+                focus, button = 'buttons', 1
+                continue
+            if focus == 'content' and kind in ('menu', 'check') and key == curses.KEY_RIGHT:
+                focus, button = 'buttons', 1
+                continue
+        if kind == 'yesno' and key in (curses.KEY_UP, curses.KEY_DOWN):
+            button = (button + (1 if key == curses.KEY_DOWN else -1)) % len(buttons)
+            continue
         if focus == 'buttons' and key in (curses.KEY_LEFT, curses.KEY_RIGHT):
             button = (button + (1 if key == curses.KEY_RIGHT else -1)) % len(buttons)
             continue
         if focus == 'content':
             if kind in ('menu', 'check'):
                 if key in (curses.KEY_UP, curses.KEY_DOWN):
-                    row = (row + (1 if key == curses.KEY_DOWN else -1)) % max(1, len(options))
+                    target = row + (1 if key == curses.KEY_DOWN else -1)
+                    if target < 0 or target >= len(options):
+                        focus, button = 'buttons', 1
+                    else:
+                        row = target
                     continue
                 if key == ' ' and kind == 'check' and options:
                     tag = options[row][0]
