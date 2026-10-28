@@ -69,7 +69,7 @@ Please follow the existing project style:
 - Bash
 - Clear variable names
 - Helpful comments where appropriate
-- Interactive menus using `whiptail`
+- Interactive terminal menus with the embedded Python `curses` UI (Back/Abort navigation; no external UI file)
 - Conservative defaults
 - Safety before automation
 - User-friendly output
