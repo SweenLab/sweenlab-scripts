@@ -2,6 +2,16 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.14 — 2026-10-28
+
+- Extended explicit single-choice selectors to network bridge, IPv4 mode, IPv6 mode and downloaded Debian template, matching storage. Highlighting alone does not select; Space/Enter selects, then Next continues.
+- IPv4/IPv6 modes start unselected. Required choices hard-stop Next until selected; accepted choices survive Back navigation.
+- Required checkbox screens also stop empty selections in the UI. Package None remains an explicit valid choice; enabling GPU passthrough now requires at least one device.
+- Optional Tailscale flags may remain empty. Existing Yes/No defaults and required text-field validation remain.
+- Updated README, guide and immutable launcher.
+
+Validation: Bash syntax and all 43 local tests pass, including required selection UI, network-mode rejection, GPU-device rejection and selector types throughout the configuration flow. Real curses selection/password/review smoke checks pass. Live Proxmox provisioning of this version remains unverified.
+
 ## Debian LXC Wizard 0.1.13 — 2026-10-28
 
 - Container and template storage now use explicit single-choice selectors with visible ( ) / (x) markers. Moving the highlight does not select an option.
