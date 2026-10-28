@@ -2,7 +2,7 @@
 # SweenLab Debian LXC Creation Wizard — MIT
 # https://github.com/SweenLab/personal-proxmox-scripts
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.4
+SCRIPT_VERSION=0.1.5
 CTID='' CREATED=0 LOG='' TMP='' UI_DIR='' UI_ACTION='' UI_VALUE=''
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 cleanup() {
@@ -17,6 +17,17 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+# Keep private logs/UI files at 077, but do not pass that mask to Proxmox.
+# File::Path::make_path in Proxmox respects the inherited process umask.
+proxmox_pct() (
+    umask 022
+    pct "$@"
+)
+assert_new_ct_path() {
+    if [[ -e "/var/lib/lxc/$CTID" || -L "/var/lib/lxc/$CTID" ]]; then
+        die "CT $CTID has a leftover /var/lib/lxc/$CTID path. Choose a fresh ID or inspect the leftover state first. Nothing was changed."
+    fi
+}
 number() { [[ "$1" =~ ^[1-9][0-9]{0,8}$ ]] && (( 10#$1 >= $2 && 10#$1 <= $3 )); }
 contains_line() { local wanted=$1 line; while IFS= read -r line; do [[ "$line" != "$wanted" ]] || return 0; done <<< "$2"; return 1; }
 ui() {
@@ -227,7 +238,8 @@ configure() {
         case "$key" in
             ctid)
                 if ! number "$ctid" 100 999999999; then error='Enter a valid CT ID.'
-                elif ! pvesh get /cluster/nextid --vmid "$ctid" >/dev/null 2>&1; then error='That ID is already in use.'; fi
+                elif ! pvesh get /cluster/nextid --vmid "$ctid" >/dev/null 2>&1; then error='That ID is already in use.'
+                elif [[ -e "/var/lib/lxc/$ctid" || -L "/var/lib/lxc/$ctid" ]]; then error='That ID has leftover host directories. Choose a fresh ID; inspect the old state separately.'; fi
                 CTID=$ctid;;
             hostname) [[ ${#hostname} -le 63 && "$hostname" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]] || error='Hostname is required; use a single valid DNS label.';;
             tags) [[ -z "$tags" || "$tags" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.+-]*(\;[a-zA-Z0-9_][a-zA-Z0-9_.+-]*)*$ ]] || error='Use valid tags separated by semicolons.';;
@@ -277,6 +289,7 @@ execute_plan() {
     LOG="/var/log/sweenlab-debian-lxc/$(date +%Y%m%d-%H%M%S)-$$.log"
     exec > >(tee -a "$LOG") 2>&1
     make_plan
+    assert_new_ct_path
     check_extraction_access
     pvesh get /cluster/nextid --vmid "$CTID" >/dev/null
     [[ -d "/sys/class/net/$bridge/bridge" ]] || die 'The selected Linux bridge is no longer available.'
@@ -306,7 +319,7 @@ execute_plan() {
         while IFS= read -r item; do [[ -z "$item" ]] || devices+=("$item"); done <<< "$gpu_selected"
     fi
     if ((${#devices[@]})); then
-        pct_help=$(pct help create 2>&1)
+        pct_help=$(proxmox_pct help create 2>&1)
         [[ "$pct_help" == *'--dev[n]'* || "$pct_help" == *'--dev0'* ]] || die 'PVE device passthrough is unavailable on this host version.'
         for device in ${devices[@]+"${devices[@]}"}; do
             [[ -c "$device" ]] || die "Device is no longer available: $device"
@@ -315,24 +328,24 @@ execute_plan() {
         done
     fi
     local rc=0
-    pct create "${args[@]}" || rc=$?
+    proxmox_pct create "${args[@]}" || rc=$?
     if (( rc )); then creation_diagnostics; die "Container creation failed (status $rc). Inspect CT $CTID before retrying; no automatic cleanup was performed."; fi
     CREATED=1
-    pct start "$CTID"
+    proxmox_pct start "$CTID"
     local ready=0 attempt
     for attempt in {1..60}; do
-        if pct exec "$CTID" -- test -d /run/systemd/system; then ready=1; break; fi
+        if proxmox_pct exec "$CTID" -- test -d /run/systemd/system; then ready=1; break; fi
         sleep 2
     done
     (( ready )) || die 'Container was not ready within 120 seconds.'
-    printf 'root:%s\n' "$password" | pct exec "$CTID" -- chpasswd
+    printf 'root:%s\n' "$password" | proxmox_pct exec "$CTID" -- chpasswd
     unset password password_confirm
     TMP=$(mktemp)
     write_guest_installer > "$TMP"
     bash -n "$TMP"; sha256sum "$TMP"
-    pct push "$CTID" "$TMP" /root/sweenlab-debian-tools.sh --perms 0700
+    proxmox_pct push "$CTID" "$TMP" /root/sweenlab-debian-tools.sh --perms 0700
     while IFS= read -r item; do [[ -z "$item" ]] || tools+=("$item"); done <<< "$selected"
-    pct exec "$CTID" -- bash /root/sweenlab-debian-tools.sh --timezone "$tz" --upgrade 1 ${tools[@]+"${tools[@]}"}
+    proxmox_pct exec "$CTID" -- bash /root/sweenlab-debian-tools.sh --timezone "$tz" --upgrade 1 ${tools[@]+"${tools[@]}"}
     if (( tailscale && ts_up )); then
         local ssh=false accept_dns=true routes=false shields=false qr=false login_rc=0
         contains_line ssh "$ts_options" && ssh=true
@@ -342,14 +355,14 @@ execute_plan() {
         contains_line qr "$ts_options" && qr=true
         printf '\nStarting Tailscale sign-in. Complete the URL/QR in your browser.\n'
         # Login URLs are sent only to the terminal, not the host run log.
-        pct exec "$CTID" -- tailscale up --timeout=120s "--ssh=$ssh" "--accept-dns=$accept_dns" "--accept-routes=$routes" "--shields-up=$shields" "--qr=$qr" >/dev/tty 2>/dev/tty || login_rc=$?
+        proxmox_pct exec "$CTID" -- tailscale up --timeout=120s "--ssh=$ssh" "--accept-dns=$accept_dns" "--accept-routes=$routes" "--shields-up=$shields" "--qr=$qr" >/dev/tty 2>/dev/tty || login_rc=$?
         if (( login_rc )); then
             printf '[ATTENTION] Tailscale sign-in is incomplete; CT and packages are preserved. Retry:\n'
             printf 'pct exec %s -- tailscale up --ssh=%s --accept-dns=%s --accept-routes=%s --shields-up=%s --qr=%s\n' "$CTID" "$ssh" "$accept_dns" "$routes" "$shields" "$qr"
         fi
     fi
     printf '\n[OK] CT %s created and selected packages installed. Log: %s\n' "$CTID" "$LOG"
-    pct exec "$CTID" -- hostname -I
+    proxmox_pct exec "$CTID" -- hostname -I
     printf 'Enter the container: pct enter %s\n' "$CTID"
 }
 main() {
