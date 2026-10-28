@@ -1,37 +1,378 @@
 #!/usr/bin/env bash
-# SweenLab Debian LXC Creation Wizard
-# Repository: https://github.com/SweenLab/personal-proxmox-scripts
-# License: MIT
-# Run the reviewed local file on a Proxmox VE host, as root.
+# SweenLab Debian LXC Creation Wizard — MIT
+# https://github.com/SweenLab/personal-proxmox-scripts
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.3
-INSTALLER=''
-CTID='' CREATED=0 LOG='' TMP=''
-DIALOG_HEIGHT=20 DIALOG_WIDTH=76 LIST_HEIGHT=11
+SCRIPT_VERSION=0.1.4
+CTID='' CREATED=0 LOG='' TMP='' UI_DIR='' UI_ACTION='' UI_VALUE=''
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 cleanup() {
     local rc=$?
     [[ -z "$TMP" ]] || rm -f -- "$TMP"
+    [[ -z "$UI_DIR" ]] || rm -rf -- "$UI_DIR"
     if (( rc != 0 )); then
         printf '\nStopped with status %s. Log: %s\n' "$rc" "${LOG:-not started}" >&2
-        if (( CREATED )); then
-            printf 'Container %s was preserved. Inspect it before retrying installation.\n' "$CTID" >&2
-        fi
+        [[ -z "$CTID" ]] || printf 'Inspect CT %s and any partial storage before retrying. Nothing is automatically destroyed.\n' "$CTID" >&2
     fi
 }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-ask() { whiptail --title "SweenLab Debian LXC · $SCRIPT_VERSION" --inputbox "$1" 10 "$DIALOG_WIDTH" "$2" 3>&1 1>&2 2>&3; }
-yesno() {
-    local rc=0
-    whiptail --title 'SweenLab' --defaultno --yesno "$1" 13 "$DIALOG_WIDTH" || rc=$?
-    (( rc != 255 )) || exit 0
-    return "$rc"
-}
-menu() { local prompt=$1; shift; whiptail --title 'SweenLab · Step by step' --menu "$prompt" "$DIALOG_HEIGHT" "$DIALOG_WIDTH" "$LIST_HEIGHT" "$@" 3>&1 1>&2 2>&3; }
 number() { [[ "$1" =~ ^[1-9][0-9]{0,8}$ ]] && (( 10#$1 >= $2 && 10#$1 <= $3 )); }
-# Use Proxmox's configured network inventory, not every runtime Linux bridge.
+contains_line() { local wanted=$1 line; while IFS= read -r line; do [[ "$line" != "$wanted" ]] || return 0; done <<< "$2"; return 1; }
+ui() {
+    local kind=$1 title=$2 prompt=$3 seed=$4; shift 4
+    printf '%s' "$seed" > "$UI_DIR/seed"
+    python3 "$UI_DIR/ui.py" "$kind" "SweenLab $SCRIPT_VERSION | $title" "$prompt" "$UI_DIR/seed" "$UI_DIR/result" "$@" </dev/tty >/dev/tty
+    IFS= read -r UI_ACTION < "$UI_DIR/result"
+    UI_VALUE=$(sed '1d' "$UI_DIR/result")
+    # Passwords are never passed as command arguments or retained on disk.
+    : > "$UI_DIR/seed"; : > "$UI_DIR/result"
+}
+host_timezone() {
+    local zone=''
+    zone=$(timedatectl show --property=Timezone --value 2>/dev/null || true)
+    if [[ -z "$zone" ]]; then
+        zone=$(readlink -f /etc/localtime 2>/dev/null || true)
+        zone=${zone#/usr/share/zoneinfo/}
+    fi
+    if [[ "$zone" =~ ^[a-zA-Z0-9_+/-]+$ && "$zone" != *..* && -f "/usr/share/zoneinfo/$zone" ]]; then
+        printf '%s\n' "$zone"
+    else
+        printf 'UTC\n'
+    fi
+}
+list_storage() {
+    local data
+    data=$(pvesm status --content "$1") || die 'Could not read storage inventory.'
+    awk 'NR>1 && $3=="active" {print $1}' <<< "$data"
+}
+list_downloaded_templates() {
+    local data
+    data=$(pveam list "$1") || die 'Could not read downloaded templates.'
+    python3 -c '
+import re, sys
+store, arch = sys.argv[1:]
+for line in sys.stdin:
+    fields = line.split()
+    if not fields:
+        continue
+    volume = fields[0]
+    if re.fullmatch(re.escape(store) + r":vztmpl/debian-(12|13)-standard_[A-Za-z0-9.+~_-]+_" + re.escape(arch) + r"\.tar\.(zst|xz|gz)", volume):
+        print(volume)
+' "$1" "$2" <<< "$data"
+}
+validate_ip() { python3 -c 'import ipaddress,sys; (ipaddress.IPv4Interface if sys.argv[1]=="4" else ipaddress.IPv6Interface)(sys.argv[2])' "$1" "$2" 2>/dev/null; }
+validate_address() { python3 -c 'import ipaddress,sys; (ipaddress.IPv4Address if sys.argv[1]=="4" else ipaddress.IPv6Address)(sys.argv[2])' "$1" "$2" 2>/dev/null; }
+validate_rate() { python3 -c 'import decimal,sys; n=decimal.Decimal(sys.argv[1]); sys.exit(0 if n.is_finite() and n>=0 and n<=8192 else 1)' "$1" 2>/dev/null; }
+yes_word() { if [[ "$1" == 1 ]]; then printf Yes; else printf No; fi; }
+# These probes are read-only and do not broaden host directory permissions.
+check_extraction_access() {
+    (( unpriv )) || return 0
+    local parent
+    for parent in /var /var/lib /var/lib/lxc; do
+        if ! lxc-usernsexec -m u:0:100000:65536 -m g:0:100000:65536 -- test -x "$parent"; then
+            printf 'Mapped container root (host UID 100000) cannot traverse %s.\n' "$parent" >&2
+            command -v namei >/dev/null && namei -l "$parent" || true
+            die 'Fix the host path/ACL problem before creation. No permissions were changed.'
+        fi
+    done
+}
+creation_diagnostics() {
+    printf '\nProxmox failed before guest setup. Read-only path diagnostics follow.\n'
+    command -v namei >/dev/null && namei -l "/var/lib/lxc/$CTID/rootfs" || true
+    command -v findmnt >/dev/null && findmnt -T /var/lib/lxc -o TARGET,SOURCE,FSTYPE,OPTIONS || true
+    printf 'Inspect the selected storage (%s), parent traversal permissions and ACLs.\n' "$root_store"
+    printf 'Do not chmod recursively or switch to privileged mode as an automatic workaround.\n'
+}
+make_plan() {
+    cat <<PLAN
+CONTAINER
+  ID / name       $CTID / $hostname
+  Tags            ${tags:-none}
+  Type            $([[ "$unpriv" == 1 ]] && printf Unprivileged || printf Privileged)
+
+RESOURCES
+  CPU / memory    $cores cores / $memory MiB
+  Root disk       $root_store · $disk GiB
+  Timezone        $tz
+  Template        ${template##*/}
+  Template store  $template_store
+
+NETWORK
+  Bridge          $bridge
+  IPv4            $ip ${gateway:+(gateway $gateway)}
+  IPv6            $ip6 ${gateway6:+(gateway $gateway6)}
+  VLAN / MTU      ${vlan:-untagged} / $mtu
+  MAC / rate      ${mac:-automatic} / ${rate:-unlimited}
+  DNS / search    ${dns:-inherit host} / ${search:-inherit host}
+
+SOFTWARE & FEATURES
+  Packages        ${packages_display:-none}
+  Nesting/keyctl  $(yes_word "$nesting") / $(yes_word "$keyctl")
+  FUSE / TUN      $(yes_word "$fuse") / $(yes_word "$tun")
+  GPU devices     ${gpu_display:-none}
+  Host boot       $(yes_word "$onboot")
+  Tailscale login $([[ "$tailscale" == 1 && "$ts_up" == 1 ]] && printf Yes || printf No)
+  Tailscale flags ${ts_flags_display:-not selected}
+
+AUTOMATIC SETTINGS
+  Root password required (hidden); locale en_US.UTF-8
+  Package upgrades enabled; firewall interface flag enabled
+  CPU limit 0; CPU weight 100; swap 512 MiB
+  PVE default startup order/delays; deletion protection off
+  Passed devices use guest UID/GID 0 and mode 0660
+
+Create starts this new CT and installs the selected software.
+Tailscale login may require browser authentication after installation.
+PLAN
+}
+configure() {
+    ctid=$(pvesh get /cluster/nextid)
+    hostname='' tags='' bridge='' ipmode=dhcp ip='' gateway='' ip6mode=manual ip6='' gateway6=''
+    vlan='' mtu=1500 mac='' rate='' dns='' search='' cores=2 memory=1024 disk=8 root_store=''
+    tz=$(host_timezone); unpriv=1 keyfile='' password='' password_confirm='' template_store='' template=''
+    selected='' ts_up=1 ts_options=$'ssh\nignore-dns\nqr' nesting=1 keyctl=1 fuse=1 tun=1 gpu=1 gpu_selected='' onboot=1
+    docker=0 tailscale=0 packages_display='' gpu_display='' ts_flags_display=''
+    local -a steps=(ctid hostname tags bridge ipmode ip gateway ip6mode ip6 gateway6 vlan mtu mac rate dns search cores memory disk root_store tz unpriv keyfile password password_confirm template_store template selected ts_up ts_options nesting keyctl fuse tun gpu gpu_selected onboot review)
+    local index=0 direction=1 key kind title prompt seed error='' names='' line old_password='' arch
+    local -a options=()
+    arch=$(dpkg --print-architecture)
+    [[ "$arch" == amd64 || "$arch" == arm64 ]] || die 'This wizard supports amd64 and arm64 hosts.'
+    while (( index < ${#steps[@]} )); do
+        key=${steps[$index]}
+        case "$key" in
+            ip|gateway) [[ "$ipmode" == static ]] || { index=$((index + direction)); continue; };;
+            ip6|gateway6) [[ "$ip6mode" == static ]] || { index=$((index + direction)); continue; };;
+            ts_up|ts_options) (( tailscale )) || { index=$((index + direction)); continue; };;
+            keyctl) (( unpriv )) || { index=$((index + direction)); continue; };;
+            gpu|gpu_selected) [[ -n "$gpu_names" ]] || { index=$((index + direction)); continue; };;
+        esac
+        if [[ "$key" == gpu_selected ]] && (( gpu == 0 )); then index=$((index + direction)); continue; fi
+        if [[ "$key" == ts_options ]] && (( ts_up == 0 )); then index=$((index + direction)); continue; fi
+        options=(); kind=input; title='Container setup'; seed=${!key-}; prompt=''
+        case "$key" in
+            ctid) prompt='Container ID (unused across the cluster)' ;;
+            hostname) prompt='Hostname (required; starts blank)' ;;
+            tags) prompt='Tags separated by semicolons; leave blank for none' ;;
+            bridge)
+                kind=menu; title='Network bridge'; prompt='Choose the bridge for this container.'
+                names=$(configured_linux_bridges)
+                while IFS= read -r line; do [[ -z "$line" ]] || options+=("$line" ''); done <<< "$names"
+                if ((${#options[@]} == 0)); then kind=notice; prompt='No active configured Proxmox Linux bridge is available. Apply its network configuration, then restart the wizard.'; fi;;
+            ipmode) kind=menu; title='IPv4'; prompt='How should IPv4 be configured?'; options=(dhcp 'DHCP' static 'Static address' manual 'No automatic IPv4');;
+            ip) title='IPv4 address'; prompt='IPv4 address/prefix, for example 10.10.10.204/24';;
+            gateway) title='IPv4 gateway'; prompt='IPv4 gateway; leave blank for none';;
+            ip6mode) kind=menu; title='IPv6'; prompt='How should IPv6 be configured?'; options=(manual 'No automatic IPv6' auto 'SLAAC' dhcp 'DHCPv6' static 'Static address');;
+            ip6) title='IPv6 address'; prompt='IPv6 address/prefix';;
+            gateway6) title='IPv6 gateway'; prompt='IPv6 gateway; leave blank for none';;
+            vlan) title='VLAN'; prompt='VLAN tag; leave blank for untagged';;
+            mtu) title='MTU'; prompt='Network MTU';;
+            mac) title='MAC address'; prompt='Leave blank for Proxmox to generate a MAC address';;
+            rate) title='Network rate'; prompt='Network limit in MB/s; leave blank for unlimited';;
+            dns) title='DNS'; prompt='DNS server IP; leave blank to inherit the host configuration';;
+            search) title='DNS search'; prompt='Search domain; leave blank to inherit the host configuration';;
+            cores) title='CPU cores'; prompt='Number of CPU cores';;
+            memory) title='Memory'; prompt=$'Memory in MiB\n\nQuick conversion:\n  512 MiB = 0.5 GiB    1024 MiB = 1 GiB\n  2048 MiB = 2 GiB     4096 MiB = 4 GiB\n  8192 MiB = 8 GiB    16384 MiB = 16 GiB';;
+            disk) title='Root disk'; prompt='Root disk size in GiB';;
+            root_store|template_store)
+                kind=menu
+                if [[ "$key" == root_store ]]; then title='Container storage'; prompt='Where should the container disk be stored?'; names=$(list_storage rootdir)
+                else title='Template storage'; prompt='Where are your downloaded Debian templates stored?'; names=$(list_storage vztmpl); fi
+                while IFS= read -r line; do [[ -z "$line" ]] || options+=("$line" ''); done <<< "$names"
+                if ((${#options[@]} == 0)); then kind=notice; prompt='No active storage of the required content type is available. Configure storage in Proxmox before continuing.'; fi;;
+            tz) title='Timezone'; prompt='Prefilled from the Proxmox host. Edit if needed.';;
+            unpriv) kind=yesno; title='Container type'; prompt='Create an unprivileged container?';;
+            keyfile) title='SSH key'; prompt='Optional host path to an SSH public key file; leave blank to skip';;
+            password) kind=password; title='Root password'; prompt='Enter the required root console password (hidden).';;
+            password_confirm) kind=password; title='Confirm password'; prompt='Re-enter the root password (hidden).';;
+            template)
+                kind=menu; title='Downloaded Debian template'; prompt='Choose a template already downloaded on this storage.'
+                names=$(list_downloaded_templates "$template_store" "$arch")
+                while IFS= read -r line; do [[ -z "$line" ]] || options+=("$line" "${line##*/}"); done <<< "$names"
+                if ((${#options[@]} == 0)); then kind=notice; prompt='No downloaded Debian 12/13 template for this host architecture was found here. Back selects another storage; Abort lets you download a template in Proxmox first.'; fi;;
+            selected)
+                kind=check; title='Packages'; prompt='Space selects packages. Docker Compose includes Docker Engine.'
+                options=(git 'Version control' curl 'Downloads' wget 'Downloads' tailscale 'VPN and optional guided sign-in'
+                    docker 'Docker Engine + Buildx' compose 'Docker Compose + Engine' nano 'Text editor' jq 'JSON tools'
+                    unzip 'ZIP extraction' iputils-ping 'Ping' openssh-server 'SSH server' sudo 'sudo; no users are created');;
+            ts_up) kind=yesno; title='Tailscale sign-in'; prompt='Run tailscale up automatically after installation? The login URL/QR will appear for browser authentication.';;
+            ts_options) kind=check; title='Tailscale options'; prompt='Choose options for tailscale up. SSH access still follows your tailnet policy.'; options=(ssh 'Enable Tailscale SSH' ignore-dns 'Keep existing DNS; ignore Tailscale DNS' accept-routes 'Accept advertised subnet routes' shields-up 'Block incoming Tailscale connections' qr 'Display a login QR code');;
+            nesting) kind=yesno; title='Nesting'; prompt='Enable nesting? Required for Docker; exposes additional host procfs/sysfs information.';;
+            keyctl) kind=yesno; title='Keyctl'; prompt='Enable keyctl? Required for Docker in an unprivileged container.';;
+            fuse) kind=yesno; title='FUSE'; prompt='Enable FUSE? It can interact with container freezing and backups.';;
+            tun) kind=yesno; title='TUN passthrough'; prompt='Pass through /dev/net/tun? Required for Tailscale. Guest UID/GID are configured automatically.';;
+            gpu) kind=yesno; title='GPU passthrough'; prompt='Pass through GPU device nodes? Host GPU drivers must already work.';;
+            gpu_selected)
+                kind=check; title='GPU devices'; prompt='Select the GPU devices to pass through. Guest UID/GID are 0.'
+                while IFS= read -r line; do [[ -z "$line" ]] || options+=("$line" ''); done <<< "$gpu_names";;
+            onboot) kind=yesno; title='Start at host boot'; prompt='Start this container when Proxmox boots? Startup order and delays use Proxmox defaults.';;
+            review) kind=review; title='Review and create'; seed=''; prompt=$(make_plan);;
+        esac
+        [[ -z "$error" ]] || prompt=$'Please correct: '"$error"$'\n\n'"$prompt"
+        ui "$kind" "$title" "$prompt" "$seed" ${options[@]+"${options[@]}"}
+        case "$UI_ACTION" in
+            abort) printf 'Aborted. No container was created.\n'; exit 0;;
+            back) direction=-1; index=$(( index > 0 ? index - 1 : 0 )); error=''; continue;;
+            next) direction=1;;
+            *) die 'Invalid dialog response.';;
+        esac
+        error=''
+        if [[ "$key" == review ]]; then
+            if (( docker && (!nesting || (unpriv && !keyctl)) )); then error='Docker requires nesting and keyctl in unprivileged mode. Use Back to change those settings.'; continue; fi
+            if (( tailscale && !tun )); then error='Tailscale requires TUN. Use Back to enable it.'; continue; fi
+            return 0
+        fi
+        old_password=$password
+        printf -v "$key" '%s' "$UI_VALUE"
+        case "$key" in
+            ctid)
+                if ! number "$ctid" 100 999999999; then error='Enter a valid CT ID.'
+                elif ! pvesh get /cluster/nextid --vmid "$ctid" >/dev/null 2>&1; then error='That ID is already in use.'; fi
+                CTID=$ctid;;
+            hostname) [[ ${#hostname} -le 63 && "$hostname" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]] || error='Hostname is required; use a single valid DNS label.';;
+            tags) [[ -z "$tags" || "$tags" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.+-]*(\;[a-zA-Z0-9_][a-zA-Z0-9_.+-]*)*$ ]] || error='Use valid tags separated by semicolons.';;
+            bridge|root_store|template_store|template) contains_line "${!key}" "$names" || error='Choose an item from the list.';;
+            ip) validate_ip 4 "$ip" || error='Enter IPv4 with a prefix length.';;
+            gateway) [[ -z "$gateway" ]] || validate_address 4 "$gateway" || error='Invalid IPv4 gateway.';;
+            ip6) validate_ip 6 "$ip6" || error='Enter IPv6 with a prefix length.';;
+            gateway6) [[ -z "$gateway6" ]] || validate_address 6 "$gateway6" || error='Invalid IPv6 gateway.';;
+            vlan) [[ -z "$vlan" ]] || number "$vlan" 1 4094 || error='VLAN must be 1–4094.';;
+            mtu) number "$mtu" 576 9000 || error='MTU must be 576–9000.';;
+            mac) [[ -z "$mac" || "$mac" =~ ^([a-fA-F0-9]{2}:){5}[a-fA-F0-9]{2}$ ]] || error='Invalid MAC address.';;
+            rate) [[ -z "$rate" ]] || validate_rate "$rate" || error='Invalid network rate.';;
+            dns) [[ -z "$dns" ]] || python3 -c 'import ipaddress,sys; ipaddress.ip_address(sys.argv[1])' "$dns" 2>/dev/null || error='Invalid DNS server IP.';;
+            search) [[ -z "$search" || "$search" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || error='Invalid search domain.';;
+            cores) number "$cores" 1 "$(nproc)" || error='Enter a valid core count for this host.';;
+            memory) number "$memory" 256 1048576 || error='Memory must be at least 256 MiB.';;
+            disk) number "$disk" 2 1048576 || error='Disk must be at least 2 GiB.';;
+            tz) [[ "$tz" != *..* && "$tz" =~ ^[a-zA-Z0-9_+/-]+$ && -f "/usr/share/zoneinfo/$tz" ]] || error='Unknown timezone.';;
+            keyfile) [[ -z "$keyfile" || ( -f "$keyfile" && -r "$keyfile" ) ]] || error='SSH key file is unreadable.';;
+            password) [[ -n "$password" && "$password" != *$'\n'* && "$password" != *$'\r'* ]] || error='A root password is required.'; [[ "$password" == "$old_password" ]] || password_confirm='';;
+            password_confirm) [[ -n "$password_confirm" && "$password_confirm" == "$password" ]] || error='Passwords must match.';;
+            selected)
+                docker=0; tailscale=0; packages_display=${selected//$'\n'/, }
+                contains_line docker "$selected" && docker=1
+                contains_line compose "$selected" && docker=1
+                contains_line tailscale "$selected" && tailscale=1;;
+            ts_options) ts_flags_display=${ts_options//$'\n'/, };;
+            nesting) (( docker == 0 || nesting == 1 )) || error='Docker was selected and requires nesting.';;
+            keyctl) (( docker == 0 || keyctl == 1 )) || error='Unprivileged Docker requires keyctl.';;
+            tun) if (( tun )); then [[ -c /dev/net/tun ]] || error='The host TUN device is missing.'; elif (( tailscale )); then error='Tailscale requires TUN.'; fi;;
+            gpu_selected)
+                gpu_display=${gpu_selected//$'\n'/, }
+                while IFS= read -r line; do [[ -z "$line" ]] || contains_line "$line" "$gpu_names" || error='Unknown GPU device.'; done <<< "$gpu_selected";;
+        esac
+        [[ -z "$error" ]] || continue
+        # Clear only values made irrelevant by an earlier choice.
+        [[ "$ipmode" == static ]] || { ip=$ipmode; gateway=''; }
+        [[ "$ip6mode" == static ]] || { ip6=$ip6mode; gateway6=''; }
+        (( unpriv )) || keyctl=0
+        (( gpu )) || { gpu_selected=''; gpu_display=''; }
+        index=$((index + 1))
+    done
+}
+execute_plan() {
+    umask 077
+    mkdir -p /var/log/sweenlab-debian-lxc
+    LOG="/var/log/sweenlab-debian-lxc/$(date +%Y%m%d-%H%M%S)-$$.log"
+    exec > >(tee -a "$LOG") 2>&1
+    make_plan
+    check_extraction_access
+    pvesh get /cluster/nextid --vmid "$CTID" >/dev/null
+    [[ -d "/sys/class/net/$bridge/bridge" ]] || die 'The selected Linux bridge is no longer available.'
+    local current_templates
+    current_templates=$(list_downloaded_templates "$template_store" "$(dpkg --print-architecture)")
+    contains_line "$template" "$current_templates" || die 'The selected template is no longer present.'
+    local net="name=eth0,bridge=$bridge,ip=$ip,ip6=$ip6,firewall=1,mtu=$mtu"
+    [[ -z "$gateway" ]] || net+=",gw=$gateway"
+    [[ -z "$gateway6" ]] || net+=",gw6=$gateway6"
+    [[ -z "$vlan" ]] || net+=",tag=$vlan"
+    [[ -z "$mac" ]] || net+=",hwaddr=$mac"
+    [[ -z "$rate" ]] || net+=",rate=$rate"
+    local features="nesting=$nesting,fuse=$fuse"
+    (( unpriv == 0 )) || features+=",keyctl=$keyctl"
+    local -a args=("$CTID" "$template" --ostype debian --arch "$(dpkg --print-architecture)" --hostname "$hostname"
+        --cores "$cores" --cpulimit 0 --cpuunits 100 --memory "$memory" --swap 512 --rootfs "$root_store:$disk"
+        --unprivileged "$unpriv" --features "$features" --net0 "$net" --onboot "$onboot" --protection 0
+        --description "SweenLab Debian LXC; wizard $SCRIPT_VERSION")
+    [[ -z "$tags" ]] || args+=(--tags "$tags")
+    [[ -z "$dns" ]] || args+=(--nameserver "$dns")
+    [[ -z "$search" ]] || args+=(--searchdomain "$search")
+    [[ -z "$keyfile" ]] || args+=(--ssh-public-keys "$keyfile")
+    local device_index=0 device item pct_help
+    local -a devices=() tools=()
+    (( tun == 0 )) || devices+=(/dev/net/tun)
+    if (( gpu )); then
+        while IFS= read -r item; do [[ -z "$item" ]] || devices+=("$item"); done <<< "$gpu_selected"
+    fi
+    if ((${#devices[@]})); then
+        pct_help=$(pct help create 2>&1)
+        [[ "$pct_help" == *'--dev[n]'* || "$pct_help" == *'--dev0'* ]] || die 'PVE device passthrough is unavailable on this host version.'
+        for device in ${devices[@]+"${devices[@]}"}; do
+            [[ -c "$device" ]] || die "Device is no longer available: $device"
+            args+=("--dev$device_index" "path=$device,gid=0,uid=0,mode=0660")
+            device_index=$((device_index + 1))
+        done
+    fi
+    local rc=0
+    pct create "${args[@]}" || rc=$?
+    if (( rc )); then creation_diagnostics; die "Container creation failed (status $rc). Inspect CT $CTID before retrying; no automatic cleanup was performed."; fi
+    CREATED=1
+    pct start "$CTID"
+    local ready=0 attempt
+    for attempt in {1..60}; do
+        if pct exec "$CTID" -- test -d /run/systemd/system; then ready=1; break; fi
+        sleep 2
+    done
+    (( ready )) || die 'Container was not ready within 120 seconds.'
+    printf 'root:%s\n' "$password" | pct exec "$CTID" -- chpasswd
+    unset password password_confirm
+    TMP=$(mktemp)
+    write_guest_installer > "$TMP"
+    bash -n "$TMP"; sha256sum "$TMP"
+    pct push "$CTID" "$TMP" /root/sweenlab-debian-tools.sh --perms 0700
+    while IFS= read -r item; do [[ -z "$item" ]] || tools+=("$item"); done <<< "$selected"
+    pct exec "$CTID" -- bash /root/sweenlab-debian-tools.sh --timezone "$tz" --upgrade 1 ${tools[@]+"${tools[@]}"}
+    if (( tailscale && ts_up )); then
+        local ssh=false accept_dns=true routes=false shields=false qr=false login_rc=0
+        contains_line ssh "$ts_options" && ssh=true
+        contains_line ignore-dns "$ts_options" && accept_dns=false
+        contains_line accept-routes "$ts_options" && routes=true
+        contains_line shields-up "$ts_options" && shields=true
+        contains_line qr "$ts_options" && qr=true
+        printf '\nStarting Tailscale sign-in. Complete the URL/QR in your browser.\n'
+        # Login URLs are sent only to the terminal, not the host run log.
+        pct exec "$CTID" -- tailscale up --timeout=120s "--ssh=$ssh" "--accept-dns=$accept_dns" "--accept-routes=$routes" "--shields-up=$shields" "--qr=$qr" >/dev/tty 2>/dev/tty || login_rc=$?
+        if (( login_rc )); then
+            printf '[ATTENTION] Tailscale sign-in is incomplete; CT and packages are preserved. Retry:\n'
+            printf 'pct exec %s -- tailscale up --ssh=%s --accept-dns=%s --accept-routes=%s --shields-up=%s --qr=%s\n' "$CTID" "$ssh" "$accept_dns" "$routes" "$shields" "$qr"
+        fi
+    fi
+    printf '\n[OK] CT %s created and selected packages installed. Log: %s\n' "$CTID" "$LOG"
+    pct exec "$CTID" -- hostname -I
+    printf 'Enter the container: pct enter %s\n' "$CTID"
+}
+main() {
+    if [[ ${1:-} == --help ]]; then printf 'Self-contained SweenLab wizard %s. Run as root on Proxmox VE.\n' "$SCRIPT_VERSION"; return; fi
+    (($# == 0)) || die 'Unknown argument.'
+    (( EUID == 0 )) || die 'Run on the Proxmox host as root.'
+    [[ -d /etc/pve ]] || die 'A Proxmox VE host is required.'
+    local cmd
+    for cmd in pct pvesh pvesm pveam python3 flock sha256sum lxc-usernsexec; do command -v "$cmd" >/dev/null || die "Required command is missing: $cmd"; done
+    python3 -c 'import curses' || die 'Python terminal support (curses) is required.'
+    exec </dev/tty
+    exec 9>/run/lock/sweenlab-debian-lxc.lock
+    flock -n 9 || die 'Another SweenLab wizard is running.'
+    umask 077
+    UI_DIR=$(mktemp -d)
+    write_ui > "$UI_DIR/ui.py"
+    gpu_names=''
+    local item
+    for item in /dev/dri/card* /dev/dri/renderD*; do [[ ! -c "$item" ]] || gpu_names+="$item"$'\n'; done
+    configure
+    execute_plan
+}
+
 configured_linux_bridges() {
     local network_json
     network_json=$(pvesh get "/nodes/$(hostname -s)/network" --type bridge --output-format json) ||
@@ -56,258 +397,183 @@ for name in sorted(bridges, key=lambda value: [int(part) if part.isdigit() else 
 ' <<< "$network_json"
 }
 
-choose_storage() {
-    local content=$1 line; local -a choices=()
-    while read -r line; do
-        [[ -n "$line" ]] && choices+=("$line" "$content storage")
-    done < <(pvesm status --content "$content" | awk 'NR>1 && $3=="active" {print $1}')
-    ((${#choices[@]})) || die "No active $content storage found."
-    whiptail --title 'Storage' --menu "Choose storage for $content" "$DIALOG_HEIGHT" "$DIALOG_WIDTH" "$LIST_HEIGHT" "${choices[@]}" 3>&1 1>&2 2>&3
-}
-main() {
-    [[ ${1:-} != --help ]] || { printf 'Self-contained wizard. Run as root on Proxmox VE. Interactive only.\n'; return; }
-    (($# == 0)) || die 'Unknown argument; use --help.'
-    (( EUID == 0 )) || die 'Run as root on the Proxmox host.'
-    [[ -d /etc/pve ]] || die 'This must run on Proxmox VE.'
-    local cmd
-    for cmd in pct pvesh pvesm pveam whiptail python3 flock sha256sum; do
-        command -v "$cmd" >/dev/null || die "Missing $cmd. Install it manually, then rerun."
-    done
-    local rows cols
-    rows=$(tput lines 2>/dev/null || echo 24); cols=$(tput cols 2>/dev/null || echo 80)
-    [[ "$rows" =~ ^[0-9]+$ && "$cols" =~ ^[0-9]+$ ]] || die 'Cannot determine terminal size.'
-    (( rows >= 24 && cols >= 80 )) || die 'Enlarge the terminal to at least 80 columns by 24 rows.'
-    DIALOG_HEIGHT=$((rows - 4)); DIALOG_WIDTH=$((cols - 4))
-    (( DIALOG_HEIGHT <= 30 )) || DIALOG_HEIGHT=30
-    (( DIALOG_WIDTH <= 100 )) || DIALOG_WIDTH=100
-    LIST_HEIGHT=$((DIALOG_HEIGHT - 9))
-    exec </dev/tty
-    exec 9>/run/lock/sweenlab-debian-lxc.lock
-    flock -n 9 || die 'Another SweenLab creation wizard is running.'
-    printf '\nSweenLab Debian LXC Creation Wizard %s\n' "$SCRIPT_VERSION"
-    local release template_store root_store template arch item pct_help
-    local bridge_names hostname tags cores memory swap disk bridge ip gateway='' vlan mtu dns search tz
-    local unpriv nesting=0 onboot protection firewall keyfile upgrade=0 net features selected
-    local ipmode ip6mode ip6 gateway6='' mac rate cpulimit cpuunits startup tun=0 fuse=0 keyctl=0
-    local password='' password2='' device gid device_index=0
-    local -a devices=() device_options=() bridges=() templates=()
-    CTID=$(ask 'Step 1 · New container ID (must be unused cluster-wide)' "$(pvesh get /cluster/nextid)")
-    number "$CTID" 100 999999999 || die 'Invalid container ID.'
-    pvesh get /cluster/nextid --vmid "$CTID" >/dev/null || die 'Container ID is unavailable.'
-    hostname=$(ask 'Step 2 · Hostname (required; one DNS label)' '')
-    [[ -n "$hostname" ]] || die 'Hostname is required. Enter a hostname to continue.'
-    [[ ${#hostname} -le 63 && "$hostname" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]] || die 'Invalid hostname.'
-    tags=$(ask 'Step 3 · Tags separated by semicolons (blank for none)' '')
-    [[ -z "$tags" || "$tags" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.+-]*(\;[a-zA-Z0-9_][a-zA-Z0-9_.+-]*)*$ ]] || die 'Invalid tags.'
-    bridge_names=$(configured_linux_bridges)
-    while IFS= read -r item; do
-        [[ -z "$item" ]] || bridges+=("$item" 'Configured Proxmox Linux bridge')
-    done <<< "$bridge_names"
-    ((${#bridges[@]})) || die 'No active configured Proxmox Linux bridge found. Apply the bridge configuration in Proxmox and rerun.'
-    bridge=$(menu 'Step 4 · Network bridge' "${bridges[@]}")
-    local bridge_allowed=0
-    while IFS= read -r item; do
-        if [[ "$bridge" == "$item" ]]; then bridge_allowed=1; break; fi
-    done <<< "$bridge_names"
-    (( bridge_allowed )) || die 'Select a configured bridge from the list.'
-    ipmode=$(menu 'IPv4 configuration' dhcp 'DHCP' static 'Static address and gateway' manual 'No automatic IPv4 configuration')
-    case "$ipmode" in
-        dhcp) ip=dhcp;; manual) ip=manual;;
-        static) ip=$(ask 'Static IPv4 address/prefix' ''); gateway=$(ask 'IPv4 gateway (blank for none)' '');;
-    esac
-    ip6mode=$(menu 'IPv6 configuration' manual 'No automatic IPv6 configuration' auto 'SLAAC' dhcp 'DHCPv6' static 'Static IPv6 address and gateway')
-    case "$ip6mode" in
-        manual|auto|dhcp) ip6=$ip6mode;;
-        static) ip6=$(ask 'Static IPv6 address/prefix' ''); gateway6=$(ask 'IPv6 gateway (blank for none)' '');;
-    esac
-    vlan=$(ask 'VLAN tag (blank for untagged)' '')
-    mtu=$(ask 'Network MTU' 1500)
-    mac=$(ask 'MAC address (blank lets Proxmox generate one)' '')
-    rate=$(ask 'Network rate limit in MB/s (blank for unlimited)' '')
-    firewall=$(menu 'Enable Proxmox firewall flag on this interface?' 1 'Enabled (rules still depend on your PVE firewall configuration)' 0 'Disabled')
-    dns=$(ask 'DNS server IP (blank inherits host)' '')
-    search=$(ask 'DNS search domain (blank inherits host)' '')
-    cores=$(ask 'Step 5 · CPU cores' 2)
-    cpulimit=$(ask 'CPU limit in cores (0 means unlimited)' 0)
-    cpuunits=$(ask 'CPU weight (cgroup v2: 100 is normal)' 100)
-    memory=$(ask 'Memory in MiB' 1024)
-    swap=$(ask 'Swap in MiB (0 disables)' 512)
-    disk=$(ask 'Root disk in GiB' 8)
-    root_store=$(choose_storage rootdir)
-    tz=$(ask 'Timezone' America/New_York)
-    unpriv=$(menu 'Step 6 · Container type' 1 'Unprivileged (recommended)' 0 'Privileged (greater host exposure)')
-    keyfile=$(ask 'SSH public key file on the host (blank to skip)' '')
-    if [[ -n "$keyfile" ]]; then [[ -f "$keyfile" && -r "$keyfile" ]] || die 'Public key file is unreadable.'; fi
-    if yesno 'Set a root console password? No leaves password login locked; pct enter still works.'; then
-        password=$(whiptail --passwordbox 'Root console password (not logged)' 10 "$DIALOG_WIDTH" 3>&1 1>&2 2>&3)
-        password2=$(whiptail --passwordbox 'Confirm root console password' 10 "$DIALOG_WIDTH" 3>&1 1>&2 2>&3)
-        [[ -n "$password" && "$password" == "$password2" && "$password" != *$'\n'* && "$password" != *$'\r'* ]] || die 'Passwords are empty, differ, or contain a newline.'
-        unset password2
-    fi
-    yesno 'Step 7 · Refresh the Proxmox template catalog? This downloads metadata only.' && pveam update
-    release=$(menu 'Debian release' 13 'Debian 13 (Trixie)' 12 'Debian 12 (Bookworm)')
-    arch=$(dpkg --print-architecture)
-    [[ "$arch" == amd64 || "$arch" == arm64 ]] || die "Unsupported host architecture: $arch"
-    while read -r item; do
-        [[ -n "$item" ]] && templates+=("$item" 'Official Proxmox template')
-    done < <(pveam available --section system | awk -v r="$release" -v a="$arch" '$2 ~ ("^debian-" r "-standard_.*_" a "\\.tar\\.") {print $2}')
-    ((${#templates[@]})) || die 'No matching template. Refresh the catalog and try again.'
-    template=$(menu 'Select the exact Debian template' "${templates[@]}")
-    template_store=$(choose_storage vztmpl)
-    number "$cores" 1 "$(nproc)" || die 'Invalid core count.'
-    number "$memory" 256 1048576 || die 'Invalid memory.'
-    [[ "$swap" == 0 ]] || number "$swap" 1 1048576 || die 'Invalid swap.'
-    number "$disk" 2 1048576 || die 'Invalid disk size.'
-    number "$mtu" 576 9000 || die 'Invalid MTU.'
-    [[ -z "$vlan" ]] || number "$vlan" 1 4094 || die 'Invalid VLAN.'
-    [[ "$bridge" =~ ^[a-zA-Z0-9_.:-]+$ && -d "/sys/class/net/$bridge/bridge" ]] || die 'Select an existing Linux bridge.'
-    [[ -z "$mac" || "$mac" =~ ^([a-fA-F0-9]{2}:){5}[a-fA-F0-9]{2}$ ]] || die 'Invalid MAC address.'
-    python3 - "$ip" "$gateway" "$dns" "$ip6" "$gateway6" "$rate" "$cpulimit" "$cpuunits" <<'PY'
-import ipaddress, sys
-ip, gw, dns, ip6, gw6, rate, limit, weight = sys.argv[1:]
-if ip not in ('dhcp', 'manual'): ipaddress.IPv4Interface(ip)
-if gw: ipaddress.IPv4Address(gw)
-if dns: ipaddress.ip_address(dns)
-if ip6 not in ('manual', 'auto', 'dhcp'): ipaddress.IPv6Interface(ip6)
-if gw6: ipaddress.IPv6Address(gw6)
-import decimal
-for value in (rate, limit):
-    if value:
-        n = decimal.Decimal(value)
-        assert n.is_finite() and n >= 0 and n <= 8192, 'Invalid rate/CPU limit'
-assert weight.isdecimal() and 1 <= int(weight) <= 10000, 'Invalid CPU weight'
-PY
-    [[ -z "$search" || "$search" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || die 'Invalid search domain.'
-    [[ "$tz" != *..* && "$tz" =~ ^[a-zA-Z0-9_+/-]+$ && -f "/usr/share/zoneinfo/$tz" ]] || die 'Invalid timezone.'
-    selected=$(whiptail --separate-output --checklist 'Step 8 · Select tools. Compose includes Docker Engine. Space toggles; Enter continues.' "$DIALOG_HEIGHT" "$DIALOG_WIDTH" "$LIST_HEIGHT" \
-        git 'Git version control' OFF curl 'curl downloads' OFF wget 'wget downloads' OFF \
-        tailscale 'Tailscale VPN (manual sign-in after install)' OFF \
-        docker 'Docker Engine and Buildx' OFF compose 'Docker Compose plugin + Engine' OFF \
-        nano 'Simple text editor' OFF vim-tiny 'Compact Vim editor' OFF htop 'Process viewer' OFF \
-        jq 'JSON tools' OFF tmux 'Persistent terminal sessions' OFF rsync 'File synchronization' OFF \
-        unzip 'ZIP extraction' OFF dnsutils 'DNS diagnostics' OFF \
-        iputils-ping 'Ping' OFF openssh-server 'SSH server (key login recommended)' OFF \
-        sudo 'sudo (does not create users)' OFF 3>&1 1>&2 2>&3)
-    local -a tools=()
-    while IFS= read -r item; do [[ -z "$item" ]] || tools+=("$item"); done <<< "$selected"
-    local docker=0 tailscale=0
-    for item in ${tools[@]+"${tools[@]}"}; do
-        case "$item" in docker|compose) docker=1;; tailscale) tailscale=1;; esac
-    done
-    nesting=$(menu 'Step 9 · Enable nesting? Docker requires Yes.' 0 'No' 1 'Yes (exposes additional host procfs/sysfs information)')
-    if (( unpriv )); then
-        keyctl=$(menu 'Enable keyctl? Required for Docker in an unprivileged CT.' 0 'No' 1 'Yes')
-    fi
-    while (( docker && nesting == 0 )); do
-        nesting=$(menu 'Docker was selected and requires nesting. Confirm Yes, or press Esc to cancel.' 1 'Yes: enable nesting' 0 'Review requirement again')
-    done
-    while (( docker && unpriv && keyctl == 0 )); do
-        keyctl=$(menu 'Unprivileged Docker requires keyctl. Confirm Yes, or press Esc to cancel.' 1 'Yes: enable keyctl' 0 'Review requirement again')
-    done
-    fuse=$(menu 'Enable FUSE? Only enable for workloads that need it.' 0 'No' 1 'Yes (can interact with container freezing/backups)')
-    tun=$(menu 'Pass through /dev/net/tun? Required for selected Tailscale installation.' 0 'No' 1 'Yes')
-    while (( tailscale && tun == 0 )); do
-        tun=$(menu 'Tailscale requires TUN passthrough. Confirm Yes, or press Esc to cancel.' 1 'Yes: enable TUN' 0 'Review requirement again')
-    done
-    if (( tun )); then
-        [[ -c /dev/net/tun ]] || die 'TUN is missing on the host. Configure it first.'
-        devices+=(/dev/net/tun)
-    fi
-    if yesno 'Step 10 · Configure GPU passthrough? Select individual /dev/dri devices. Host drivers must already work.'; then
-        local -a gpu_choices=()
-        for item in /dev/dri/card* /dev/dri/renderD*; do
-            [[ ! -c "$item" ]] || gpu_choices+=("$item" 'GPU device' OFF)
-        done
-        ((${#gpu_choices[@]})) || die 'No /dev/dri GPU devices found. Host GPU drivers are required.'
-        selected=$(whiptail --separate-output --checklist 'Select GPU devices to pass through' "$DIALOG_HEIGHT" "$DIALOG_WIDTH" "$LIST_HEIGHT" "${gpu_choices[@]}" 3>&1 1>&2 2>&3)
-        while IFS= read -r item; do [[ -z "$item" ]] || devices+=("$item"); done <<< "$selected"
-    fi
-    if yesno 'Pass through another character device, such as a USB serial adapter? Block devices are excluded.'; then
-        device=$(ask 'Host character device path under /dev (one device)' '')
-        [[ "$device" =~ ^/dev/[a-zA-Z0-9_./-]+$ && "$device" != *..* && -c "$device" ]] || die 'Invalid character device.'
-        for item in ${devices[@]+"${devices[@]}"}; do [[ "$device" != "$item" ]] || die 'Device already selected.'; done
-        devices+=("$device")
-    fi
-    if ((${#devices[@]})); then
-        pct_help=$(pct help create 2>&1)
-        [[ "$pct_help" == *'--dev[n]'* || "$pct_help" == *'--dev0'* ]] ||
-            die 'This PVE version does not advertise device passthrough. Upgrade PVE or omit devices.'
-        for device in ${devices[@]+"${devices[@]}"}; do
-            [[ -c "$device" ]] || die "Device disappeared: $device"
-            gid=$(ask "Guest numeric group ID for $device (0 = root; choose video/render GID for GPU access by non-root users)" 0)
-            [[ "$gid" == 0 ]] || number "$gid" 1 2147483647 || die 'Invalid device group ID.'
-            device_options+=("--dev$device_index" "path=$device,gid=$gid,uid=0,mode=0660")
-            device_index=$((device_index + 1))
-        done
-    fi
-    onboot=$(menu 'Step 11 · Start at host boot?' 0 'No' 1 'Yes')
-    startup=$(ask 'Startup order (0–9999; lower starts earlier)' 0)
-    [[ "$startup" == 0 ]] || number "$startup" 1 9999 || die 'Invalid startup order.'
-    protection=$(menu 'Protect this container against accidental removal?' 1 'Yes' 0 'No')
-    if yesno 'Step 12 · Upgrade Debian packages inside the new container?'; then upgrade=1; fi
-    net="name=eth0,bridge=$bridge,ip=$ip,ip6=$ip6,firewall=$firewall,mtu=$mtu"
-    [[ -z "$gateway" ]] || net+=",gw=$gateway"
-    [[ -z "$gateway6" ]] || net+=",gw6=$gateway6"
-    [[ -z "$vlan" ]] || net+=",tag=$vlan"
-    [[ -z "$mac" ]] || net+=",hwaddr=$mac"
-    [[ -z "$rate" ]] || net+=",rate=$rate"
-    features="nesting=$nesting,fuse=$fuse"
-    (( unpriv == 0 )) || features+=",keyctl=$keyctl"
-    local plan
-    printf -v plan 'Create CT %s (%s)\nTemplate: %s\nTemplate storage: %s\nRoot storage: %s (%s GiB)\nCPU: %s; RAM: %s MiB; swap: %s MiB\nUnprivileged: %s; features: %s\nNetwork: %s\nDNS: %s; search: %s\nBoot: %s; timezone: %s; locale: en_US.UTF-8\nSSH key: %s\nTools: %s\nUpgrade packages: %s; TUN device: %s\n\nThe container will start now. No existing guest will be modified.\nDocker in LXC shares the host kernel; a VM provides stronger isolation.\nDownload template if needed, create and install?' \
-        "$CTID" "$hostname" "$template" "$template_store" "$root_store" "$disk" "$cores" "$memory" "$swap" "$unpriv" "$features" "$net" "${dns:-inherit}" "${search:-inherit}" "$onboot" "$tz" "${keyfile:-none}" "${tools[*]:-none}" "$upgrade" "$tun"
-    plan+=$'\n'
-    plan+="Tags: ${tags:-none}; CPU limit: $cpulimit; weight: $cpuunits; startup order: $startup; protection: $protection"
-    plan+=$'\n'
-    plan+="Device options: ${device_options[*]:-none}; root password: $([[ -n "$password" ]] && echo set || echo locked)"
-    whiptail --scrolltext --defaultno --yesno "$plan" "$DIALOG_HEIGHT" "$DIALOG_WIDTH" || exit 0
-    umask 077
-    mkdir -p /var/log/sweenlab-debian-lxc
-    LOG="/var/log/sweenlab-debian-lxc/$(date +%Y%m%d-%H%M%S)-$$.log"
-    exec > >(tee -a "$LOG") 2>&1
-    printf '%s\n' "$plan"
-    TMP=$(mktemp)
-    INSTALLER=$TMP
-    write_guest_installer > "$INSTALLER"
-    bash -n "$INSTALLER"
-    sha256sum "$INSTALLER"
-    # Recheck after review; pct create also enforces ID allocation atomically.
-    pvesh get /cluster/nextid --vmid "$CTID" >/dev/null
-    local volume="$template_store:vztmpl/$template"
-    if ! pveam list "$template_store" | awk '{print $1}' | grep -Fxq "$volume"; then
-        pveam download "$template_store" "$template"
-    fi
-    local -a args=("$CTID" "$volume" --ostype debian --arch "$arch" --hostname "$hostname"
-        --cores "$cores" --cpulimit "$cpulimit" --cpuunits "$cpuunits" --memory "$memory" --swap "$swap" --rootfs "$root_store:$disk"
-        --unprivileged "$unpriv" --features "$features" --net0 "$net" --onboot "$onboot"
-        --protection "$protection" --startup "order=$startup"
-        --description "SweenLab Debian LXC; wizard $SCRIPT_VERSION")
-    [[ -z "$dns" ]] || args+=(--nameserver "$dns")
-    [[ -z "$search" ]] || args+=(--searchdomain "$search")
-    [[ -z "$keyfile" ]] || args+=(--ssh-public-keys "$keyfile")
-    [[ -z "$tags" ]] || args+=(--tags "$tags")
-    if (( device_index > 0 )); then args+=("${device_options[@]}"); fi
-    pct create "${args[@]}"
-    CREATED=1
-    pct start "$CTID"
-    local ready=0 attempt
-    for attempt in {1..60}; do
-        if pct exec "$CTID" -- test -d /run/systemd/system; then ready=1; break; fi
-        sleep 2
-    done
-    (( ready )) || die 'Container did not become ready within 120 seconds.'
-    if [[ -n "$password" ]]; then
-        printf 'root:%s\n' "$password" | pct exec "$CTID" -- chpasswd
-        unset password
-    fi
-    # The installer below is embedded in this same reviewed script.
-    pct push "$CTID" "$TMP" /root/sweenlab-debian-tools.sh --perms 0700
-    pct exec "$CTID" -- bash /root/sweenlab-debian-tools.sh --timezone "$tz" --upgrade "$upgrade" ${tools[@]+"${tools[@]}"}
-    printf '\n[OK] CT %s created. Log: %s\n' "$CTID" "$LOG"
-    pct exec "$CTID" -- hostname -I
-    printf 'Console: pct enter %s\n' "$CTID"
-    (( tailscale == 0 )) || printf 'Sign in: pct exec %s -- tailscale up\n' "$CTID"
-    printf 'Installer remains in /root/sweenlab-debian-tools.sh for reviewed retries.\n'
+
+write_ui() {
+    cat <<'SWEENLAB_UI'
+import curses
+import os
+import sys
+import textwrap
+
+
+def button_set(kind):
+    if kind == 'yesno':
+        return [('Back', 'back', ''), ('Yes', 'next', '1'), ('No', 'next', '0'), ('Abort', 'abort', '')]
+    if kind == 'notice':
+        return [('Back', 'back', ''), ('Abort', 'abort', '')]
+    return [('Back', 'back', ''), ('Create' if kind == 'review' else 'Next', 'next', None), ('Abort', 'abort', '')]
+
+
+def run(screen, kind, title, prompt, seed, options):
+    curses.curs_set(0)
+    screen.keypad(True)
+    text = seed
+    cursor = len(text)
+    tags = [tag for tag, _ in options]
+    selected = set(seed.splitlines())
+    row = tags.index(seed) if seed in tags else 0
+    scroll = 0
+    buttons = button_set(kind)
+    button = 1 if kind != 'notice' else 0
+    if kind == 'yesno' and seed == '0':
+        button = 2
+    focus = 'buttons' if kind in ('yesno', 'review', 'notice') else 'content'
+    while True:
+        screen.erase()
+        h, w = screen.getmaxyx()
+        if h < 24 or w < 80:
+            screen.addnstr(0, 0, 'Enlarge this terminal to at least 80 columns x 24 rows. Esc aborts.', max(1, w - 1))
+            screen.refresh()
+            if screen.getch() == 27:
+                return 'abort', ''
+            continue
+        width = min(w - 4, 100)
+        left = (w - width) // 2
+        top = 1
+        height = h - 2
+        box = screen.derwin(height, width, top, left)
+        box.box()
+        def write(y, x, value, attr=0):
+            if 0 <= y < height - 1:
+                box.addnstr(y, x, value, max(0, width - x - 2), attr)
+        write(0, 3, ' ' + title + ' ', curses.A_BOLD)
+        lines = []
+        for paragraph in prompt.splitlines():
+            lines.extend(textwrap.wrap(paragraph, width - 6) or [''])
+        if kind == 'review':
+            limit = height - 7
+            scroll = max(0, min(scroll, max(0, len(lines) - limit)))
+            for idx, line in enumerate(lines[scroll:scroll + limit]):
+                write(2 + idx, 3, line)
+        else:
+            for idx, line in enumerate(lines[:8]):
+                write(2 + idx, 3, line)
+            content_y = 3 + min(len(lines), 8)
+            if kind in ('input', 'password'):
+                shown = '*' * len(text) if kind == 'password' else text
+                field_width = width - 8
+                offset = max(0, cursor - field_width + 1)
+                write(content_y, 3, ' ' * field_width, curses.A_REVERSE if focus == 'content' else 0)
+                write(content_y, 3, shown[offset:], curses.A_REVERSE if focus == 'content' else 0)
+            elif kind in ('menu', 'check'):
+                visible = max(1, height - content_y - 5)
+                start = max(0, min(row - visible + 1, max(0, len(options) - visible)))
+                for idx, (tag, label) in enumerate(options[start:start + visible], start):
+                    mark = ('[x] ' if tag in selected else '[ ] ') if kind == 'check' else ''
+                    label = (label or tag) if kind == 'menu' else (tag if not label else tag + '  ' + label)
+                    write(content_y + idx - start, 3, mark + label,
+                          curses.A_REVERSE if idx == row and focus == 'content' else 0)
+        labels = ['< ' + value[0] + ' >' for value in buttons]
+        total = sum(map(len, labels)) + 4 * (len(labels) - 1)
+        x = max(2, (width - total) // 2)
+        for idx, label in enumerate(labels):
+            write(height - 4, x, label, curses.A_REVERSE | curses.A_BOLD if idx == button else curses.A_NORMAL)
+            x += len(label) + 4
+        hint = 'Tab: buttons | Shift+Tab: previous | Esc: abort'
+        if kind == 'check':
+            hint = 'Space: select | Tab: buttons | Esc: abort'
+        if kind == 'review':
+            hint = 'Up/Down: scroll | Left/Right: buttons | Esc: abort'
+        write(height - 2, 3, hint, curses.A_DIM)
+        curses.curs_set(1 if focus == 'content' and kind in ('input', 'password') else 0)
+        if focus == 'content' and kind in ('input', 'password'):
+            box.move(content_y, 3 + min(cursor, width - 9))
+        box.refresh()
+        key = screen.get_wch()
+        if key == '\x1b' or key == '\x03':
+            return 'abort', ''
+        if key == curses.KEY_RESIZE:
+            continue
+        if key in ('\t', curses.KEY_BTAB):
+            if focus == 'content':
+                focus = 'buttons'
+                button = len(buttons) - 1 if key == curses.KEY_BTAB else 1
+            else:
+                step = -1 if key == curses.KEY_BTAB else 1
+                target = button + step
+                if target < 0 or target >= len(buttons):
+                    if kind in ('input', 'password', 'menu', 'check'):
+                        focus = 'content'
+                    else:
+                        button = target % len(buttons)
+                else:
+                    button = target
+            continue
+        if kind == 'review' and key in (curses.KEY_UP, curses.KEY_DOWN, curses.KEY_NPAGE, curses.KEY_PPAGE):
+            scroll += {curses.KEY_UP: -1, curses.KEY_DOWN: 1, curses.KEY_NPAGE: 8, curses.KEY_PPAGE: -8}[key]
+            continue
+        if focus == 'buttons' and key in (curses.KEY_LEFT, curses.KEY_RIGHT):
+            button = (button + (1 if key == curses.KEY_RIGHT else -1)) % len(buttons)
+            continue
+        if focus == 'content':
+            if kind in ('menu', 'check'):
+                if key in (curses.KEY_UP, curses.KEY_DOWN):
+                    row = (row + (1 if key == curses.KEY_DOWN else -1)) % max(1, len(options))
+                    continue
+                if key == ' ' and kind == 'check' and options:
+                    tag = options[row][0]
+                    selected.symmetric_difference_update([tag])
+                    continue
+            elif kind in ('input', 'password'):
+                if key in (curses.KEY_BACKSPACE, '\x7f', '\b'):
+                    if cursor:
+                        text = text[:cursor - 1] + text[cursor:]
+                        cursor -= 1
+                    continue
+                if key == curses.KEY_DC:
+                    text = text[:cursor] + text[cursor + 1:]
+                    continue
+                if key in (curses.KEY_LEFT, curses.KEY_RIGHT, curses.KEY_HOME, curses.KEY_END):
+                    cursor = {curses.KEY_LEFT: max(0, cursor - 1), curses.KEY_RIGHT: min(len(text), cursor + 1),
+                              curses.KEY_HOME: 0, curses.KEY_END: len(text)}[key]
+                    continue
+                if key == '\x15':
+                    text, cursor = '', 0
+                    continue
+                if isinstance(key, str) and key.isprintable():
+                    text = text[:cursor] + key + text[cursor:]
+                    cursor += 1
+                    continue
+        if key in ('\n', '\r', curses.KEY_ENTER):
+            _, action, value = buttons[button if focus == 'buttons' else 1]
+            if action != 'next' or value is not None:
+                return action, value or ''
+            if kind in ('input', 'password'):
+                return action, text
+            if kind == 'menu':
+                return action, tags[row] if tags else ''
+            if kind == 'check':
+                return action, '\n'.join(tag for tag in tags if tag in selected)
+            return action, ''
+
+
+def main():
+    kind, title, prompt, seed_path, result_path, *raw = sys.argv[1:]
+    options = list(zip(raw[::2], raw[1::2]))
+    with open(seed_path) as handle:
+        seed = handle.read()
+    try:
+        action, value = curses.wrapper(run, kind, title, prompt, seed, options)
+    except KeyboardInterrupt:
+        action, value = 'abort', ''
+    fd = os.open(result_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as handle:
+        handle.write(action + '\n' + value)
+
+
+if __name__ == '__main__':
+    main()
+SWEENLAB_UI
 }
 
 # Keep guest setup in this file so the launcher never fetches another script.
@@ -336,7 +602,7 @@ main() {
                 (($# >= 2)) || fail "Missing value for $1"
                 case "$1" in --timezone) tz=$2;; --upgrade) upgrade=$2;; esac
                 shift 2;;
-            git|curl|wget|nano|vim-tiny|htop|jq|tmux|rsync|unzip|dnsutils|iputils-ping|openssh-server|sudo)
+            git|curl|wget|nano|jq|unzip|iputils-ping|openssh-server|sudo)
                 packages+=("$1"); tools+=("$1"); shift;;
             docker) docker=1; shift;;
             compose) docker=1; compose=1; shift;;
@@ -417,7 +683,7 @@ REPO
         apt-get install -y --no-install-recommends tailscale
         systemctl enable --now tailscaled
         systemctl is-active --quiet tailscaled
-        printf 'Tailscale installed. Run tailscale up separately to sign in.\n'
+        printf 'Tailscale installed. The wizard will handle the selected sign-in options.\n'
     fi
     for item in ${tools[@]+"${tools[@]}"}; do
         [[ $(dpkg-query -W -f='${Status}' "$item") == 'install ok installed' ]] || fail "Verification failed: $item"
@@ -427,5 +693,6 @@ REPO
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi
 SWEENLAB_GUEST_INSTALLER
 }
+
 
 if [[ -z "${BASH_SOURCE[0]:-}" || "${BASH_SOURCE[0]:-}" == "$0" ]]; then main "$@"; fi
