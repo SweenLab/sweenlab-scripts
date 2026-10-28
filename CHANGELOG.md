@@ -2,6 +2,18 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.10 — 2026-10-28
+
+- Root disk initially 10 GiB.
+- Detect locale from host configuration, normalize supported UTF-8 values, and fall back to C.UTF-8. Timezone remains host-derived with UTC fallback; both are editable.
+- Require packages or explicit exclusive None. Select all/clear all remains available; None is not passed to APT.
+- Remove the Tailscale Shields Up choice and flag.
+- Strengthen guest locale setup: generate when needed, reset overrides, persist Debian 12/13 defaults, activate/verify UTF-8, then refresh APT and run a full upgrade using apt-get dist-upgrade.
+- Center wizard content, bold required prompts/choices, and add emoji/color installation stages while preserving quiet/verbose output and private logs.
+- Update README, guide and immutable launcher.
+
+Validation: Bash syntax for host and embedded installer plus all 31 local tests pass, including host-locale precedence/fallback, guest activation-before-upgrade ordering, required/None package behavior, centered bold content, disk default and Tailscale arguments. This release has not been tested end-to-end on a live Proxmox host; the earlier reported locale issue cannot be confirmed resolved on that host yet.
+
 ## Debian LXC Wizard 0.1.9 — 2026-10-28
 
 - Added a case-sensitivity note to the tags screen: TEST and test are different tags. Match the exact capitalization of predefined Proxmox tags.

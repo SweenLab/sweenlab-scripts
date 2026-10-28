@@ -32,14 +32,14 @@ The installer is embedded in this single script and runs inside the new containe
 
 - Step-by-step terminal screens with Back/Abort throughout and a grouped Create/Abort review.
 - Explicit unprivileged or privileged container selection.
-- Name-only Proxmox bridge/storage choices, IPv4/IPv6, VLAN, MTU and DNS configuration. Runtime Docker/firewall bridges are hidden.
+- Name-only Proxmox bridge/storage choices and IPv4/IPv6 configuration; other network settings use background defaults. Runtime Docker/firewall bridges are hidden.
 - Selectable git, curl, wget, Tailscale, Docker Engine/Compose, nano, jq, unzip, ping, OpenSSH and sudo.
 - Orange/green terminal accents, horizontal Yes/No controls, FUSE and GPU defaulting to No, and automatic device UID/GID settings.
-- Mandatory root password, host-derived timezone, memory conversion chart and already-downloaded Debian templates.
+- Mandatory root password, host-derived timezone and locale, 10 GiB initial root disk, memory conversion chart and already-downloaded Debian templates.
 - Optional automatic Tailscale sign-in with SSH/DNS/route settings and a browser login link.
 - Correct Proxmox directory creation permissions, private logs, read-only extraction diagnostics.
 - Simplified networking with background defaults and arrow-key navigation between fields, lists and buttons.
-- Select all/clear all packages, optional Python 3/pip/venv, editable locale, and quiet or verbose installation progress.
+- Required package choice with Select all/clear all and exclusive None, optional Python 3/pip/venv, editable host-derived locale, full Debian upgrade after locale setup, and quiet or verbose emoji/color installation progress.
 - Official package repositories, signed packages, rerunnable tool installation and logs.
 - No additional installer shell scripts are downloaded or executed.
 
@@ -48,16 +48,16 @@ The installer is embedded in this single script and runs inside the new containe
 Use the copy button on the command block below, then paste it into your **Proxmox node shell as root**:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/f3525891fc5a148a5141c9ee1db33015e0cb9d69/scripts/proxmox-debian-lxc-create.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/934e5a65a3f8795e9b6667c93d1502788329bb5c/scripts/proxmox-debian-lxc-create.sh)"
 ```
 
-This command is pinned to version 0.1.9 so it does not depend on a cached main-branch download. This downloads and runs the SweenLab wizard. Back preserves your entries; the final Create action begins provisioning. The guest installer is embedded; no companion file or additional shell script download is required.
+This command is pinned to version 0.1.10 so it does not depend on a cached main-branch download. This downloads and runs the SweenLab wizard. Back preserves your entries; the final Create action begins provisioning. The guest installer is embedded; no companion file or additional shell script download is required.
 
 For a first test, choose a new disposable container ID. Follow the [step-by-step guide](docs/proxmox-debian-lxc-create.md) for prerequisites, passthrough permissions, retries and testing. You can inspect the script on GitHub before running it.
 
 ## Testing Status
 
-Version 0.1.9 is an initial test build. Bash syntax and simulated workflow checks pass; live Proxmox, Docker, Tailscale and GPU validation is still required. Start with a disposable container.
+Version 0.1.10 is an initial test build. Bash syntax and simulated workflow checks pass; live Proxmox, Docker, Tailscale and GPU validation is still required. Start with a disposable container.
 
 ## Documentation
 

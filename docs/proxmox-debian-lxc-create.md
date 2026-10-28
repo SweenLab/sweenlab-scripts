@@ -1,16 +1,16 @@
 # SweenLab Debian LXC Creation Wizard
 
-Version 0.1.9 (initial test build). One self-contained script, fully step by step, with Back navigation and a final Create/Abort review. Live Proxmox testing is still required.
+Version 0.1.10 (initial test build). One self-contained script, fully step by step, with Back navigation and a final Create/Abort review. Live Proxmox testing is still required.
 
 ## Quick Start: copy and paste
 
 Use the copy button in the top-right corner of this block, then paste into your **Proxmox node shell as root**:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/f3525891fc5a148a5141c9ee1db33015e0cb9d69/scripts/proxmox-debian-lxc-create.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/934e5a65a3f8795e9b6667c93d1502788329bb5c/scripts/proxmox-debian-lxc-create.sh)"
 ```
 
-The command is pinned to the verified version 0.1.9 script to avoid stale raw GitHub main-branch downloads. No clone, companion file, or additional shell-script download is needed.
+The command is pinned to the verified version 0.1.10 script to avoid stale raw GitHub main-branch downloads. No clone, companion file, or additional shell-script download is needed.
 
 If an older wizard is still open, abort it and restart with this command. Use a new disposable CT ID for the first test. Do not reuse an ID left by a failed creation until its state has been inspected.
 
@@ -35,17 +35,17 @@ Every configuration screen has **Back** and **Abort**. Input, menu, and package 
 
 After Create, provisioning begins and Back navigation ends. Failures preserve any remaining new CT/storage state for inspection; the wizard never destroys it automatically.
 
-The UI uses orange headings, soft green selections, and neutral body text. Terminals without color support fall back to monochrome; `NO_COLOR=1` also disables color.
+The UI centers prompts, fields and choices, with required prompts and choices in bold. It uses orange headings, soft green selections, and neutral body text. Creation progress uses emojis and colored stage indicators in quiet and verbose modes. Terminals without color support fall back to monochrome; `NO_COLOR=1` also disables color.
 
 ## Configuration screens
 
 1. **Container details:** unused cluster-wide ID, blank required hostname, and optional tags separated by semicolons. Tags are case-sensitive: `TEST` and `test` are different. Match the exact capitalization of predefined Proxmox tags.
 2. **Networking:** choose an active configured Proxmox Linux bridge. Choices show only names such as `vmbr0` and `vmbr1`; Docker and temporary firewall bridges are hidden. Choose IPv4/IPv6 mode (switching to static starts with a blank address field), and addresses/gateways where relevant. Untagged networking, MTU 1500, an automatically generated MAC, no rate limit, and inherited host DNS/search settings are applied in the background.
-3. **Resources:** CPU cores, memory in MiB, root disk size in GiB, and container storage. Storage choices show names only.
-4. **Timezone and locale:** Choose a guest UTF-8 locale (prefilled as `en_US.UTF-8`); it is generated and set as the guest default. Timezone is automatically prefilled from the Proxmox host's timezone; edit if needed. If the host timezone cannot be resolved, UTC is shown.
+3. **Resources:** CPU cores, memory in MiB, root disk size in GiB (initially 10), and container storage. Storage choices show names only.
+4. **Timezone and locale:** The guest locale is prefilled from the host configuration: `/etc/locale.conf`, then `/etc/default/locale`. Supported UTF-8 names are normalized; if no supported setting is found, `C.UTF-8` is used. SSH client locale variables are not used. You can edit the choice; it is generated where needed, written as the guest default and verified before the full upgrade. Timezone is automatically prefilled from the Proxmox host's timezone; edit if needed. If the host timezone cannot be resolved, UTC is shown.
 5. **Access:** unprivileged mode is initially Yes. Choose an optional host SSH public-key file. Enter and confirm a mandatory root console password. Passwords remain hidden and are never logged or included in command arguments. Setting a console password does not enable root password login over SSH.
 6. **Downloaded templates:** select template storage, then one of the Debian templates already downloaded there. There is no catalog refresh, separate Debian-release chooser, or automatic template download. If the selected storage has none, Back selects another storage; Abort lets you download a template in Proxmox first.
-7. **Packages:** git, curl, wget, Tailscale, Docker Engine/Buildx, Docker Compose (includes Engine), nano, jq, unzip, ping, OpenSSH server, sudo, and Python 3 (with pip and venv). Packages are initially unselected. Select all / clear all toggles every package; individual choices remain editable. htop, vim-tiny, tmux, rsync, and dnsutils are no longer choices.
+7. **Packages:** git, curl, wget, Tailscale, Docker Engine/Buildx, Docker Compose (includes Engine), nano, jq, unzip, ping, OpenSSH server, sudo, and Python 3 (with pip and venv). Packages are initially unselected. You must choose at least one package or explicitly select **None**. None clears and excludes individual packages until deselected. Select all / clear all toggles every package and clears None; Clear all alone cannot continue. None still installs the base locale/timezone support and runs the full upgrade. htop, vim-tiny, tmux, rsync, and dnsutils are no longer choices.
 8. **Tailscale:** when selected, choose whether to start sign-in automatically and configure its options (details below).
 9. **Features:** nesting, keyctl for unprivileged containers, FUSE, and TUN use horizontal Yes/No controls. Nesting, keyctl and TUN start at Yes; FUSE starts at No because most installs do not need it and it can complicate freezing/backups. Docker requires nesting and keyctl in unprivileged mode; Tailscale requires TUN. Invalid combinations cannot continue.
 10. **GPU:** shown only when GPU nodes exist. Passthrough starts at No. Choose Yes to select individual devices. There is no arbitrary additional-character-device question or numeric guest-group prompt.
@@ -77,8 +77,8 @@ These are applied in the background and shown in the overview:
 | Interface firewall flag | Enabled (`firewall=1`); existing Proxmox firewall enablement/rules still apply |
 | CPU limit / weight | `0` (unlimited) / `100` |
 | Swap | 512 MiB |
-| Package upgrades | Always enabled inside the new Debian CT |
-| Guest locale | Selected in the wizard; initially `en_US.UTF-8` |
+| Package upgrades | Always enabled: refresh APT and full upgrade after locale configuration |
+| Guest locale | Detected from host configuration; fallback `C.UTF-8`; editable |
 | Passed device UID/GID / permissions | `0:0`, `0660` |
 | Startup order / delays | Proxmox defaults |
 | Deletion protection | Off |
@@ -94,7 +94,6 @@ When Tailscale is selected, **Run tailscale up automatically** starts as Yes. A 
 | Enable Tailscale SSH | Selected | `--ssh=true`; access still follows tailnet policy |
 | Keep existing DNS | Selected | `--accept-dns=false` |
 | Accept advertised subnet routes | Unselected | `--accept-routes=true` if selected |
-| Block incoming Tailscale connections | Unselected | `--shields-up=true` if selected |
 
 After package installation, the wizard runs `tailscale up` with explicit values for these flags and a 120-second timeout. QR codes are disabled (`--qr=false`); open or copy/paste the login link. The link is shown only on the terminal, outside the host run log. **You still need to authenticate in your browser.** No auth key is requested or stored.
 
@@ -112,7 +111,7 @@ tar: /var/lib/lxc/204/rootfs: Cannot open: Permission denied
 
 occurs inside Proxmox's template extraction, before guest setup. The wizard through version 0.1.4 passed its private-file `umask 077` to Proxmox. Proxmox's directory creation respects that mask, producing `0700` CT directories that mapped container root (host UID 100000) cannot traverse. This matches the reported root-owned `0700` directories.
 
-Version 0.1.9 runs Proxmox container commands in a subshell with `umask 022`, while logs and UI files retain their private mask. A regression test reproduces the old `0700` behavior with Perl's `File::Path::make_path` and verifies the corrected `0755` directories, private `0600` log files, and command status preservation. This has not yet been validated by creating a container on a live Proxmox host.
+Version 0.1.10 runs Proxmox container commands in a subshell with `umask 022`, while logs and UI files retain their private mask. A regression test reproduces the old `0700` behavior with Perl's `File::Path::make_path` and verifies the corrected `0755` directories, private `0600` log files, and command status preservation. This has not yet been validated by creating a container on a live Proxmox host.
 
 Choose a fresh unused CT ID for the next test. The wizard validates the ID format and checks that no VM or CT uses it through Proxmox. Leftover directories alone do not block selection or trigger a separate pre-creation rejection; Proxmox handles creation errors. Existing failed directories and disks are left untouched for separate inspection. The read-only mapped-root traversal preflight remains in place.
 
@@ -128,6 +127,12 @@ pct config 204
 ```
 
 Some paths or the CT configuration may no longer exist after Proxmox's own cleanup. Do not run another creation with ID 204 until the remaining configuration/storage has been inspected. Use a fresh ID to test the corrected release; inspect old storage separately before deciding whether to remove it.
+
+## Locale and full upgrade
+
+The installer refreshes APT and installs locale support, generates the selected locale if needed, resets stale locale overrides, and writes both `/etc/locale.conf` and `/etc/default/locale` for Debian 12/13 compatibility. It activates and verifies UTF-8 in the installer environment. It then refreshes APT again and runs `apt-get -y dist-upgrade` (with the existing keep-config policy), the script-oriented equivalent of `apt full-upgrade -y`. A failed locale check stops setup instead of reporting success. New login sessions use the saved system default; an already-open shell can retain its previous environment.
+
+References: [Debian 13 update-locale](https://manpages.debian.org/trixie/locales/update-locale.8.en.html), [Debian APT command equivalents](https://www.debian.org/doc/manuals/debian-faq/pkgtools.html).
 
 ## Logs, safety, and retry behavior
 
