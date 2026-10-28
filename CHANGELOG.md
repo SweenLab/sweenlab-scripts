@@ -2,6 +2,14 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.7 — 2026-10-28
+
+- Removed the leftover-directory restriction from container ID selection and the equivalent pre-creation rejection. ID format validation and Proxmox checks for IDs already in use remain.
+- Existing directories are not automatically changed or removed; Proxmox reports creation failures normally.
+- Updated README, guide and immutable launcher.
+
+Validation: Bash syntax and 25 local tests pass. Workflow fixtures now contain an existing CT host directory and proceed through selection and simulated creation. Live Proxmox testing remains required.
+
 ## Debian LXC Wizard 0.1.6 — 2026-10-28
 
 - Added readable orange/green terminal accents with monochrome fallback, concise installation stages, and an optional verbose-output screen. Quiet mode retains full command output in the private log and shows failure details.
