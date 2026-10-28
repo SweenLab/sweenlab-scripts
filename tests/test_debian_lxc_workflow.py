@@ -63,7 +63,7 @@ pct() {
     if [[ "$1" == exec && "$*" == *'bash /root/sweenlab-debian-tools.sh'* && "$SCENARIO" == installer-fail ]]; then return 42; fi
     return 0
 }
-visits_memory=0; visits_disk=0; visits_review=0; visits_password=0; visits_hostname=0
+visits_memory=0; visits_disk=0; visits_review=0; visits_password=0; visits_hostname=0; visits_selected=0
 ui() {
     printf '%s|%s|seed=%s|error=%s\\n' "$key" "$1" "$([[ "$key" == password* ]] && echo HIDDEN || printf '%s' "$4")" "$error" >> "$FIXTURE/trace"
     UI_ACTION=next; UI_VALUE=$4
@@ -87,7 +87,7 @@ ui() {
         password) visits_password=$((visits_password+1)); UI_VALUE=fixture-secret
             if [[ "$SCENARIO" == mandatory && "$visits_password" == 1 ]]; then UI_VALUE=''; fi;;
         password_confirm) UI_VALUE=fixture-secret;;
-        selected) if [[ "$SCENARIO" == no-packages ]]; then UI_VALUE=''; else UI_VALUE=$'git\\ncompose\\ntailscale'; fi;;
+        selected) visits_selected=$((visits_selected+1)); if [[ "$SCENARIO" == no-packages ]]; then if (( visits_selected == 1 )); then UI_VALUE=''; else UI_VALUE=__none__; fi; else UI_VALUE=$'git\\ncompose\\ntailscale'; fi;;
         review) visits_review=$((visits_review+1));
             printf '%s' "$3" > "$FIXTURE/review"
             if [[ "$SCENARIO" == back && "$visits_review" == 1 ]]; then UI_ACTION=back; fi;;
@@ -117,12 +117,13 @@ configure
         self.assertEqual(sum(line.startswith('password|') for line in files['trace'].splitlines()), 2)
         self.assertIn('A root password is required.', files['trace'])
 
-    def test_empty_package_selection_can_continue(self):
+    def test_empty_selection_requires_explicit_none(self):
         result, files = self.exercise('no-packages')
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Choose at least one package', files['trace'])
         self.assertNotIn('ts_options|', files['trace'])
         self.assertNotIn('ts_up|', files['trace'])
-        self.assertIn('Packages        none', files['review'])
+        self.assertIn('Packages        None', files['review'])
 
     def test_abort_does_not_create_anything(self):
         result, files = self.exercise('abort', execute=True)
@@ -136,6 +137,7 @@ configure
         calls = files['calls']
         self.assertIn('<--cpulimit> <0> <--cpuunits> <100>', calls)
         self.assertIn('<--swap> <512>', calls)
+        self.assertIn('<--rootfs> <storage4tb:10>', calls)
         self.assertIn('<--onboot> <1> <--protection> <0>', calls)
         self.assertNotIn('<--startup>', calls)
         self.assertIn('firewall=1,mtu=1500', calls)
@@ -147,7 +149,7 @@ configure
         self.assertIn('<--locale> <en_GB.UTF-8>', calls)
         self.assertIn('verbose|yesno|seed=0', files['trace'])
         self.assertIn('fuse|yesno|seed=0', files['trace'])
-        self.assertIn('<tailscale> <up> <--timeout=120s> <--ssh=true> <--accept-dns=false> <--accept-routes=false> <--shields-up=false> <--qr=false>', calls)
+        self.assertIn('<tailscale> <up> <--timeout=120s> <--ssh=true> <--accept-dns=false> <--accept-routes=false> <--qr=false>', calls)
         self.assertIn('SECRET-AUTH-URL', files['auth-output'])
         logs = '\n'.join(value for key, value in files.items() if key.startswith('logs/'))
         self.assertNotIn('SECRET-AUTH-URL', logs)

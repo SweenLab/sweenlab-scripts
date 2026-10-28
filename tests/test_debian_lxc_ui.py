@@ -15,12 +15,15 @@ class Screen:
     def __init__(self, keys):
         self.keys = iter(keys)
         self.drawn = []
+        self.positions = []
     def keypad(self, value): pass
     def erase(self): pass
     def getmaxyx(self): return 24, 93
     def derwin(self, *args): return self
     def box(self): pass
-    def addnstr(self, y, x, value, n, *args): self.drawn.append(value[:n])
+    def addnstr(self, y, x, value, n, *args):
+        self.drawn.append(value[:n])
+        self.positions.append((y, x, value[:n], args))
     def move(self, *args): pass
     def refresh(self): pass
     def get_wch(self): return next(self.keys)
@@ -110,6 +113,26 @@ class TerminalUiTests(unittest.TestCase):
         self.assertEqual(self.drive('menu', keys, '', options)[0], ('next', 'vmbr1'))
         keys = [curses.KEY_RIGHT, curses.KEY_LEFT, '\n']
         self.assertEqual(self.drive('check', keys, '', options)[0], ('back', ''))
+
+    def test_none_excludes_packages_until_deselected(self):
+        options = [('__all__', 'Select all / clear all'), ('__none__', 'None'), ('git', 'Git'), ('python3', 'Python')]
+        keys = [curses.KEY_DOWN, ' ', curses.KEY_DOWN, ' ', '\n']
+        self.assertEqual(self.drive('check', keys, '', options)[0], ('next', '__none__'))
+        keys = [curses.KEY_DOWN, ' ', curses.KEY_UP, ' ', '\n']
+        self.assertEqual(self.drive('check', keys, '', options)[0], ('next', 'git\npython3'))
+        keys = [curses.KEY_DOWN, ' ', ' ', curses.KEY_DOWN, ' ', '\n']
+        self.assertEqual(self.drive('check', keys, '', options)[0], ('next', 'git'))
+
+    def test_centered_required_text_is_bold(self):
+        screen = Screen(['\n'])
+        with patch.object(curses, 'curs_set'), patch.object(curses, 'has_colors', return_value=False):
+            self.ui.run(screen, 'menu', 'Bridge (required)', 'Choose a bridge', '', [('vmbr0', '')])
+        for text in ('Choose a bridge', 'vmbr0'):
+            matches = [entry for entry in screen.positions if entry[2] == text]
+            self.assertTrue(matches)
+            for y, x, value, attrs in matches:
+                self.assertEqual(x, (89 - len(value)) // 2)
+                self.assertTrue(attrs[0] & curses.A_BOLD)
 
     def test_no_default_for_optional_features(self):
         self.assertEqual(self.drive('yesno', ['\n'], '0')[0], ('next', '0'))

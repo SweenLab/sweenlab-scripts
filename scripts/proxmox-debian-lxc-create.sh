@@ -2,7 +2,7 @@
 # SweenLab Debian LXC Creation Wizard — MIT
 # https://github.com/SweenLab/personal-proxmox-scripts
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.9
+SCRIPT_VERSION=0.1.10
 CTID='' CREATED=0 LOG='' TMP='' UI_DIR='' UI_ACTION='' UI_VALUE=''
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 cleanup() {
@@ -46,6 +46,26 @@ host_timezone() {
     else
         printf 'UTC\n'
     fi
+}
+# Read configured host locale, not SSH client LANG/LC_* variables.
+host_locale() {
+    python3 - <<'HOST_LOCALE'
+import pathlib, re
+for name in ('/etc/locale.conf', '/etc/default/locale'):
+    try:
+        text = pathlib.Path(name).read_text()
+    except OSError:
+        continue
+    match = re.search(r'^\s*LANG\s*=\s*[\"\']?([^\"\'\s#]+)', text, re.M)
+    if match:
+        value = match.group(1)
+        if value.lower() in ('c.utf8', 'c.utf-8'):
+            print('C.UTF-8'); break
+        if re.fullmatch(r'[a-zA-Z]{2,3}_[a-zA-Z]{2}\.(?i:utf-?8)', value):
+            print(value.split('.')[0] + '.UTF-8'); break
+else:
+    print('C.UTF-8')
+HOST_LOCALE
 }
 list_storage() {
     local data
@@ -124,7 +144,7 @@ SOFTWARE & FEATURES
 AUTOMATIC SETTINGS
   Root password required (hidden); locale $locale_name
   Verbose output  $(yes_word "$verbose")
-  Package upgrades enabled; firewall interface flag enabled
+  Full package upgrade enabled; firewall interface flag enabled
   CPU limit 0; CPU weight 100; swap 512 MiB
   PVE default startup order/delays; deletion protection off
   Passed devices use guest UID/GID 0 and mode 0660
@@ -136,10 +156,10 @@ PLAN
 configure() {
     ctid=$(pvesh get /cluster/nextid)
     hostname='' tags='' bridge='' ipmode=dhcp ip='' gateway='' ip6mode=manual ip6='' gateway6=''
-    vlan='' mtu=1500 mac='' rate='' dns='' search='' cores=2 memory=1024 disk=8 root_store=''
+    vlan='' mtu=1500 mac='' rate='' dns='' search='' cores=2 memory=1024 disk=10 root_store=''
     tz=$(host_timezone); unpriv=1 keyfile='' password='' password_confirm='' template_store='' template=''
     selected='' ts_up=1 ts_options=$'ssh\nignore-dns' nesting=1 keyctl=1 fuse=0 tun=1 gpu=0 gpu_selected='' onboot=1
-    locale_name=en_US.UTF-8 verbose=0
+    locale_name=$(host_locale) verbose=0
     docker=0 tailscale=0 packages_display='' gpu_display='' ts_flags_display=''
     local -a steps=(ctid hostname tags bridge ipmode ip gateway ip6mode ip6 gateway6 cores memory disk root_store tz locale_name unpriv keyfile password password_confirm template_store template selected ts_up ts_options nesting keyctl fuse tun gpu gpu_selected onboot verbose review)
     local index=0 direction=1 key kind title prompt seed error='' names='' line old_password='' arch
@@ -182,7 +202,7 @@ configure() {
                 else title='Template storage'; prompt='Where are your downloaded Debian templates stored?'; names=$(list_storage vztmpl); fi
                 while IFS= read -r line; do [[ -z "$line" ]] || options+=("$line" ''); done <<< "$names"
                 if ((${#options[@]} == 0)); then kind=notice; prompt='No active storage of the required content type is available. Configure storage in Proxmox before continuing.'; fi;;
-            locale_name) title='Locale'; prompt='Guest UTF-8 locale, for example en_US.UTF-8 or en_GB.UTF-8';;
+            locale_name) title='Locale'; prompt='Detected from host locale configuration; edit if needed. C.UTF-8 is the fallback. Examples: en_US.UTF-8, en_GB.UTF-8.';;
             verbose) kind=yesno; title='Installation output'; prompt='Show verbose installation output? No shows concise progress; the full output is saved in the private log.';;
             tz) title='Timezone'; prompt='Prefilled from the Proxmox host. Edit if needed.';;
             unpriv) kind=yesno; title='Container type'; prompt='Create an unprivileged container?';;
@@ -195,12 +215,12 @@ configure() {
                 while IFS= read -r line; do [[ -z "$line" ]] || options+=("$line" "${line##*/}"); done <<< "$names"
                 if ((${#options[@]} == 0)); then kind=notice; prompt='No downloaded Debian 12/13 template for this host architecture was found here. Back selects another storage; Abort lets you download a template in Proxmox first.'; fi;;
             selected)
-                kind=check; title='Packages'; prompt='Space selects packages. Docker Compose includes Docker Engine.'
-                options=(__all__ 'Select all / clear all' python3 'Python 3 + pip + venv' git 'Version control' curl 'Downloads' wget 'Downloads' tailscale 'VPN and optional guided sign-in'
+                kind=check; title='Packages'; prompt='Choose packages or explicitly select None. Space toggles a choice. Deselect None before choosing individual packages. Compose includes Engine.'
+                options=(__all__ 'Select all / clear all' __none__ 'None (no optional packages)' python3 'Python 3 + pip + venv' git 'Version control' curl 'Downloads' wget 'Downloads' tailscale 'VPN and optional guided sign-in'
                     docker 'Docker Engine + Buildx' compose 'Docker Compose + Engine' nano 'Text editor' jq 'JSON tools'
                     unzip 'ZIP extraction' iputils-ping 'Ping' openssh-server 'SSH server' sudo 'sudo; no users are created');;
             ts_up) kind=yesno; title='Tailscale sign-in'; prompt='Run tailscale up automatically after installation? The login link will appear for browser authentication.';;
-            ts_options) kind=check; title='Tailscale options'; prompt='Choose options for tailscale up. SSH access still follows your tailnet policy.'; options=(ssh 'Enable Tailscale SSH' ignore-dns 'Keep existing DNS; ignore Tailscale DNS' accept-routes 'Accept advertised subnet routes' shields-up 'Block incoming Tailscale connections');;
+            ts_options) kind=check; title='Tailscale options'; prompt='Choose options for tailscale up. SSH access still follows your tailnet policy.'; options=(ssh 'Enable Tailscale SSH' ignore-dns 'Keep existing DNS; ignore Tailscale DNS' accept-routes 'Accept advertised subnet routes');;
             nesting) kind=yesno; title='Nesting'; prompt='Enable nesting? Required for Docker; exposes additional host procfs/sysfs information.';;
             keyctl) kind=yesno; title='Keyctl'; prompt='Enable keyctl? Required for Docker in an unprivileged container.';;
             fuse) kind=yesno; title='FUSE'; prompt='Enable FUSE? It can interact with container freezing and backups.';;
@@ -213,6 +233,9 @@ configure() {
             review) kind=review; title='Review and create'; seed=''; prompt=$(make_plan);;
         esac
         [[ -z "$error" ]] || prompt=$'Please correct: '"$error"$'\n\n'"$prompt"
+        case "$key" in
+            ctid|hostname|bridge|ipmode|ip|ip6mode|ip6|cores|memory|disk|root_store|tz|locale_name|password|password_confirm|template_store|template|selected) title+=" (required)";;
+        esac
         ui "$kind" "$title" "$prompt" "$seed" ${options[@]+"${options[@]}"}
         case "$UI_ACTION" in
             abort) printf 'Aborted. No container was created.\n'; exit 0;;
@@ -238,7 +261,7 @@ configure() {
             bridge|root_store|template_store|template) contains_line "${!key}" "$names" || error='Choose an item from the list.';;
             ipmode) if [[ $ipmode == static && ( $ip == dhcp || $ip == manual ) ]]; then ip=''; fi;;
             ip6mode) if [[ $ip6mode == static && ( $ip6 == dhcp || $ip6 == manual || $ip6 == auto ) ]]; then ip6=''; fi;;
-            locale_name) [[ $locale_name =~ ^[a-zA-Z]{2,3}_[a-zA-Z]{2}\.UTF-8$ ]] || error='Enter a UTF-8 locale such as en_US.UTF-8.';;
+            locale_name) [[ $locale_name == C.UTF-8 || $locale_name =~ ^[a-zA-Z]{2,3}_[a-zA-Z]{2}\.UTF-8$ ]] || error='Enter a UTF-8 locale such as en_US.UTF-8.';;
             ip) validate_ip 4 "$ip" || error='Enter IPv4 with a prefix length.';;
             gateway) [[ -z "$gateway" ]] || validate_address 4 "$gateway" || error='Invalid IPv4 gateway.';;
             ip6) validate_ip 6 "$ip6" || error='Enter IPv6 with a prefix length.';;
@@ -251,7 +274,10 @@ configure() {
             password) [[ -n "$password" && "$password" != *$'\n'* && "$password" != *$'\r'* ]] || error='A root password is required.'; [[ "$password" == "$old_password" ]] || password_confirm='';;
             password_confirm) [[ -n "$password_confirm" && "$password_confirm" == "$password" ]] || error='Passwords must match.';;
             selected)
+                if [[ -z $selected ]]; then error='Choose at least one package or explicitly select None.'; continue; fi
+                if contains_line __none__ "$selected" && [[ $selected != __none__ ]]; then error='None cannot be combined with packages.'; continue; fi
                 docker=0; tailscale=0; packages_display=${selected//$'\n'/, }
+                [[ $selected != __none__ ]] || packages_display=None
                 contains_line docker "$selected" && docker=1
                 contains_line compose "$selected" && docker=1
                 contains_line tailscale "$selected" && tailscale=1;;
@@ -277,8 +303,8 @@ progress() {
     if [[ ${PROGRESS_COLOR:-0} == 1 && ${TERM:-dumb} != dumb && -z ${NO_COLOR:-} ]]; then
         orange=$'\033[38;5;208m'; green=$'\033[38;5;114m'; reset=$'\033[0m'
     fi
-    if [[ $state == OK ]]; then printf '  %s[OK]%s %s\n' "$green" "$reset" "$message"
-    else printf '  %s[..]%s %s\n' "$orange" "$reset" "$message"; fi
+    if [[ $state == OK ]]; then printf '  %s✅ [OK]%s %s\n' "$green" "$reset" "$message"
+    else printf '  %s⏳ [..]%s %s\n' "$orange" "$reset" "$message"; fi
 }
 install_stage() {
     local label=$1 rc=0 output
@@ -304,13 +330,15 @@ execute_plan() {
     LOG="/var/log/sweenlab-debian-lxc/$(date +%Y%m%d-%H%M%S)-$$.log"
     exec > >(tee -a "$LOG") 2>&1
     make_plan >> "$LOG"
-    printf "\n  SweenLab · Debian LXC %s\n  CT %s · %s\n\n" "$SCRIPT_VERSION" "$CTID" "$hostname"
+    printf "\n  🟠 SweenLab · Debian LXC %s\n  🖥️  CT %s · %s\n\n" "$SCRIPT_VERSION" "$CTID" "$hostname"
+    progress RUN "🔎 Check host and selected settings"
     check_extraction_access
     pvesh get /cluster/nextid --vmid "$CTID" >/dev/null
     [[ -d "/sys/class/net/$bridge/bridge" ]] || die 'The selected Linux bridge is no longer available.'
     local current_templates
     current_templates=$(list_downloaded_templates "$template_store" "$(dpkg --print-architecture)")
     contains_line "$template" "$current_templates" || die 'The selected template is no longer present.'
+    progress OK "🔎 Host and template checks passed"
     local net="name=eth0,bridge=$bridge,ip=$ip,ip6=$ip6,firewall=1,mtu=$mtu"
     [[ -z "$gateway" ]] || net+=",gw=$gateway"
     [[ -z "$gateway6" ]] || net+=",gw6=$gateway6"
@@ -343,40 +371,40 @@ execute_plan() {
         done
     fi
     local rc=0
-    install_stage "Create container and extract Debian" proxmox_pct create "${args[@]}" || rc=$?
+    install_stage "📦 Create container and extract Debian" proxmox_pct create "${args[@]}" || rc=$?
     if (( rc )); then creation_diagnostics; die "Container creation failed (status $rc). Inspect CT $CTID before retrying; no automatic cleanup was performed."; fi
     CREATED=1
-    install_stage "Start container" proxmox_pct start "$CTID"
+    install_stage "🚀 Start container" proxmox_pct start "$CTID"
     local ready=0 attempt
     for attempt in {1..60}; do
         if proxmox_pct exec "$CTID" -- test -d /run/systemd/system >/dev/null 2>&1; then ready=1; break; fi
         sleep 2
     done
     (( ready )) || die 'Container was not ready within 120 seconds.'
-    progress OK 'Container is ready'
+    progress OK '🟢 Container is ready'
     printf 'root:%s\n' "$password" | proxmox_pct exec "$CTID" -- chpasswd
+    progress OK "🔐 Required root password configured"
     unset password password_confirm
     TMP=$(mktemp)
     write_guest_installer > "$TMP"
     bash -n "$TMP"; sha256sum "$TMP" >> "$LOG"
-    install_stage "Copy embedded installer" proxmox_pct push "$CTID" "$TMP" /root/sweenlab-debian-tools.sh --perms 0700
-    while IFS= read -r item; do [[ -z "$item" ]] || tools+=("$item"); done <<< "$selected"
-    install_stage "Configure Debian and install selected tools" proxmox_pct exec "$CTID" -- bash /root/sweenlab-debian-tools.sh --timezone "$tz" --locale "$locale_name" --upgrade 1 ${tools[@]+"${tools[@]}"}
+    install_stage "🧰 Prepare embedded installer" proxmox_pct push "$CTID" "$TMP" /root/sweenlab-debian-tools.sh --perms 0700
+    while IFS= read -r item; do [[ -z "$item" || $item == __none__ ]] || tools+=("$item"); done <<< "$selected"
+    install_stage "🌐 Configure locale, fully update Debian and install tools" proxmox_pct exec "$CTID" -- bash /root/sweenlab-debian-tools.sh --timezone "$tz" --locale "$locale_name" --upgrade 1 ${tools[@]+"${tools[@]}"}
     if (( tailscale && ts_up )); then
-        local ssh=false accept_dns=true routes=false shields=false login_rc=0
+        local ssh=false accept_dns=true routes=false login_rc=0
         contains_line ssh "$ts_options" && ssh=true
         contains_line ignore-dns "$ts_options" && accept_dns=false
         contains_line accept-routes "$ts_options" && routes=true
-        contains_line shields-up "$ts_options" && shields=true
         printf '\nStarting Tailscale sign-in. Open or copy the login link in your browser.\n'
         # Login URLs are sent only to the terminal, not the host run log.
-        proxmox_pct exec "$CTID" -- tailscale up --timeout=120s "--ssh=$ssh" "--accept-dns=$accept_dns" "--accept-routes=$routes" "--shields-up=$shields" --qr=false >/dev/tty 2>/dev/tty || login_rc=$?
+        proxmox_pct exec "$CTID" -- tailscale up --timeout=120s "--ssh=$ssh" "--accept-dns=$accept_dns" "--accept-routes=$routes" --qr=false >/dev/tty 2>/dev/tty || login_rc=$?
         if (( login_rc )); then
             printf '[ATTENTION] Tailscale sign-in is incomplete; CT and packages are preserved. Retry:\n'
-            printf 'pct exec %s -- tailscale up --ssh=%s --accept-dns=%s --accept-routes=%s --shields-up=%s --qr=false\n' "$CTID" "$ssh" "$accept_dns" "$routes" "$shields"
+            printf 'pct exec %s -- tailscale up --ssh=%s --accept-dns=%s --accept-routes=%s --qr=false\n' "$CTID" "$ssh" "$accept_dns" "$routes"
         fi
     fi
-    printf '\n[OK] CT %s created and selected packages installed. Log: %s\n' "$CTID" "$LOG"
+    printf '\n✅ CT %s created and selected packages installed. Log: %s\n' "$CTID" "$LOG"
     proxmox_pct exec "$CTID" -- hostname -I
     printf 'Enter the container: pct enter %s\n' "$CTID"
 }
@@ -484,8 +512,11 @@ def run(screen, kind, title, prompt, seed, options):
         box.box()
         def write(y, x, value, attr=0):
             if 0 <= y < height - 1:
+                if x == 3:
+                    value = value.strip()
+                    x = max(2, (width - min(len(value), width - 6)) // 2)
                 box.addnstr(y, x, value, max(0, width - x - 2), attr)
-        write(0, 3, ' ' + title + ' ', curses.A_BOLD | accent)
+        write(0, max(2, (width - len(title) - 2) // 2), ' ' + title + ' ', curses.A_BOLD | accent)
         lines = []
         for paragraph in prompt.splitlines():
             lines.extend(textwrap.wrap(paragraph, width - 6) or [''])
@@ -495,24 +526,28 @@ def run(screen, kind, title, prompt, seed, options):
             for idx, line in enumerate(lines[scroll:scroll + limit]):
                 write(2 + idx, 3, line)
         else:
+            block_height = min(len(lines), 8) + 1 + (min(len(options), max(1, height - min(len(lines), 8) - 8)) if kind in ('menu', 'check') else 1)
+            prompt_y = max(2, 2 + (height - 7 - block_height) // 2)
+            required = '(required)' in title
             for idx, line in enumerate(lines[:8]):
-                write(2 + idx, 3, line)
-            content_y = 3 + min(len(lines), 8)
+                write(prompt_y + idx, 3, line, curses.A_BOLD if required else 0)
+            content_y = prompt_y + 1 + min(len(lines), 8)
             if kind in ('input', 'password'):
                 shown = '*' * len(text) if kind == 'password' else text
                 field_width = width - 8
                 offset = max(0, cursor - field_width + 1)
-                write(content_y, 3, ' ' * field_width, curses.A_REVERSE if focus == 'content' else 0)
-                write(content_y, 3, shown[offset:], curses.A_REVERSE if focus == 'content' else 0)
+                field_x = max(3, (width - min(len(shown[offset:]), field_width)) // 2)
+                box.addnstr(content_y, 3, ' ' * field_width, field_width, curses.A_REVERSE if focus == 'content' else 0)
+                box.addnstr(content_y, field_x, shown[offset:], field_width, (curses.A_REVERSE if focus == 'content' else 0) | (curses.A_BOLD if required else 0))
             elif kind in ('menu', 'check'):
                 visible = max(1, height - content_y - 5)
                 start = max(0, min(row - visible + 1, max(0, len(options) - visible)))
                 for idx, (tag, label) in enumerate(options[start:start + visible], start):
-                    checked = (set(tags) - {'__all__'} <= selected) if tag == '__all__' else tag in selected
+                    checked = (set(tags) - {'__all__', '__none__'} <= selected) if tag == '__all__' else tag in selected
                     mark = ('[x] ' if checked else '[ ] ') if kind == 'check' else ''
-                    label = (label or tag) if kind == 'menu' or tag == '__all__' else (tag if not label else tag + '  ' + label)
+                    label = (label or tag) if kind == 'menu' or tag in ('__all__', '__none__') else (tag if not label else tag + '  ' + label)
                     write(content_y + idx - start, 3, mark + label,
-                          (highlight or curses.A_REVERSE) if idx == row and focus == 'content' else (success if checked and kind == 'check' else 0))
+                          ((highlight or curses.A_REVERSE) if idx == row and focus == 'content' else (success if checked and kind == 'check' else 0)) | (curses.A_BOLD if required else 0))
         labels = ['< ' + value[0] + ' >' for value in buttons]
         total = sum(map(len, labels)) + 4 * (len(labels) - 1)
         x = max(2, (width - total) // 2)
@@ -527,7 +562,7 @@ def run(screen, kind, title, prompt, seed, options):
         write(height - 2, 3, hint, curses.A_DIM)
         curses.curs_set(1 if focus == 'content' and kind in ('input', 'password') else 0)
         if focus == 'content' and kind in ('input', 'password'):
-            box.move(content_y, 3 + min(cursor, width - 9))
+            box.move(content_y, field_x + min(cursor - offset, field_width - 1))
         box.refresh()
         key = screen.get_wch()
         if key == '\x1b' or key == '\x03':
@@ -580,9 +615,12 @@ def run(screen, kind, title, prompt, seed, options):
                 if key == ' ' and kind == 'check' and options:
                     tag = options[row][0]
                     if tag == '__all__':
-                        all_tags = set(tags) - {'__all__'}
+                        all_tags = set(tags) - {'__all__', '__none__'}
+                        selected.discard('__none__')
                         selected = selected - all_tags if all_tags <= selected else selected | all_tags
-                    else:
+                    elif tag == '__none__':
+                        selected = set() if '__none__' in selected else {'__none__'}
+                    elif '__none__' not in selected:
                         selected.symmetric_difference_update([tag])
                     continue
             elif kind in ('input', 'password'):
@@ -684,17 +722,30 @@ main() {
     if (( tailscale )); then [[ -c /dev/net/tun ]] || fail 'TUN device is missing.'; fi
     export DEBIAN_FRONTEND=noninteractive
     apt-get -o Acquire::Retries=3 update
-    if (( upgrade )); then apt-get -o Dpkg::Options::=--force-confold -y upgrade; fi
     if (( docker || tailscale )); then packages+=(ca-certificates curl gnupg); fi
     apt-get install -y --no-install-recommends "${packages[@]}"
-    [[ $locale_name =~ ^[a-zA-Z]{2,3}_[a-zA-Z]{2}\.UTF-8$ ]] || fail 'Invalid UTF-8 locale.'
-    local locale_source=${locale_name%.UTF-8}
-    [[ -f /usr/share/i18n/locales/$locale_source ]] || fail 'Locale is not available in Debian.'
-    if ! grep -Fxq "$locale_name UTF-8" /etc/locale.gen; then
-        printf '\n%s UTF-8\n' "$locale_name" >> /etc/locale.gen
+    [[ $locale_name == C.UTF-8 || $locale_name =~ ^[a-zA-Z]{2,3}_[a-zA-Z]{2}\.UTF-8$ ]] || fail 'Invalid UTF-8 locale.'
+    if [[ $locale_name != C.UTF-8 ]]; then
+        local locale_source=${locale_name%.UTF-8}
+        [[ -f /usr/share/i18n/locales/$locale_source ]] || fail 'Locale is not available in Debian.'
+        if ! grep -Fxq "$locale_name UTF-8" /etc/locale.gen; then
+            printf '\n%s UTF-8\n' "$locale_name" >> /etc/locale.gen
+        fi
+        locale-gen "$locale_name"
     fi
-    locale-gen
-    update-locale LANG="$locale_name"
+    # Debian 13 uses locale.conf; older templates also read default/locale.
+    update-locale --reset LANG="$locale_name"
+    update-locale --locale-file /etc/default/locale --reset LANG="$locale_name"
+    update-locale --locale-file /etc/locale.conf --reset LANG="$locale_name"
+    unset LANGUAGE LC_ALL
+    for item in ${!LC_@}; do unset "$item"; done
+    export LANG="$locale_name"
+    [[ $(locale charmap) == UTF-8 ]] || fail 'Selected locale did not activate.'
+    printf '🌐 Locale configured and verified: %s\n' "$LANG"
+    if (( upgrade )); then
+        apt-get -o Acquire::Retries=3 update
+        apt-get -o Dpkg::Options::=--force-confold -y dist-upgrade
+    fi
     ln -snf "/usr/share/zoneinfo/$tz" /etc/localtime
     printf '%s\n' "$tz" > /etc/timezone
     dpkg-reconfigure -f noninteractive tzdata
