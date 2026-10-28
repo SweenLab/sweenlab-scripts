@@ -2,7 +2,7 @@
 # SweenLab Debian LXC Creation Wizard — MIT
 # https://github.com/SweenLab/personal-proxmox-scripts
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.6
+SCRIPT_VERSION=0.1.7
 CTID='' CREATED=0 LOG='' TMP='' UI_DIR='' UI_ACTION='' UI_VALUE=''
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 cleanup() {
@@ -23,11 +23,6 @@ proxmox_pct() (
     umask 022
     pct "$@"
 )
-assert_new_ct_path() {
-    if [[ -e "/var/lib/lxc/$CTID" || -L "/var/lib/lxc/$CTID" ]]; then
-        die "CT $CTID has a leftover /var/lib/lxc/$CTID path. Choose a fresh ID or inspect the leftover state first. Nothing was changed."
-    fi
-}
 number() { [[ "$1" =~ ^[1-9][0-9]{0,8}$ ]] && (( 10#$1 >= $2 && 10#$1 <= $3 )); }
 contains_line() { local wanted=$1 line; while IFS= read -r line; do [[ "$line" != "$wanted" ]] || return 0; done <<< "$2"; return 1; }
 ui() {
@@ -242,8 +237,7 @@ configure() {
         case "$key" in
             ctid)
                 if ! number "$ctid" 100 999999999; then error='Enter a valid CT ID.'
-                elif ! pvesh get /cluster/nextid --vmid "$ctid" >/dev/null 2>&1; then error='That ID is already in use.'
-                elif [[ -e "/var/lib/lxc/$ctid" || -L "/var/lib/lxc/$ctid" ]]; then error='That ID has leftover host directories. Choose a fresh ID; inspect the old state separately.'; fi
+                elif ! pvesh get /cluster/nextid --vmid "$ctid" >/dev/null 2>&1; then error='That ID is already in use.'; fi
                 CTID=$ctid;;
             hostname) [[ ${#hostname} -le 63 && "$hostname" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]] || error='Hostname is required; use a single valid DNS label.';;
             tags) [[ -z "$tags" || "$tags" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.+-]*(\;[a-zA-Z0-9_][a-zA-Z0-9_.+-]*)*$ ]] || error='Use valid tags separated by semicolons.';;
@@ -323,7 +317,6 @@ execute_plan() {
     exec > >(tee -a "$LOG") 2>&1
     make_plan >> "$LOG"
     printf "\n  SweenLab · Debian LXC %s\n  CT %s · %s\n\n" "$SCRIPT_VERSION" "$CTID" "$hostname"
-    assert_new_ct_path
     check_extraction_access
     pvesh get /cluster/nextid --vmid "$CTID" >/dev/null
     [[ -d "/sys/class/net/$bridge/bridge" ]] || die 'The selected Linux bridge is no longer available.'

@@ -15,7 +15,9 @@ class WorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             d = Path(directory)
             (d / 'bridge').mkdir()
+            (d / 'lxc' / '204').mkdir(parents=True)
             source = SCRIPT.read_text().replace(GUARD, '')
+            source = source.replace('/var/lib/lxc/', str(d / 'lxc') + '/')
             source = source.replace('exec > >(tee -a "$LOG") 2>&1', 'exec >>"$LOG" 2>&1')
             source = source.replace('/var/log/sweenlab-debian-lxc', str(d / 'logs'))
             source = source.replace('"/sys/class/net/$bridge/bridge"', '"' + str(d / 'bridge') + '"')

@@ -51,17 +51,3 @@ rc=0; install_stage Failure command_fixture 42 || rc=$?
             self.assertIn('[OK] Quiet', result.stdout)
             self.assertNotIn('[OK] Failure', result.stdout)
 
-    def test_leftover_directory_and_dangling_symlink_are_rejected(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = pathlib.Path(directory)
-            source = SCRIPT.read_text().replace('/var/lib/lxc/', directory + '/')
-            script = root / 'wizard.sh'
-            script.write_text(source)
-            (root / '204').mkdir()
-            (root / '205').symlink_to(root / 'missing')
-            for ctid in ['204', '205']:
-                result = subprocess.run(['bash', '-c', 'source "$1"; CTID=$2; assert_new_ct_path', 'test', str(script), ctid], capture_output=True, text=True)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn('leftover', result.stderr)
-            self.assertTrue((root / '204').is_dir())
-            self.assertTrue((root / '205').is_symlink())
