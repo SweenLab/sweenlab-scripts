@@ -2,6 +2,18 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.11 — 2026-10-28
+
+- Fixed Tab/Shift+Tab order so Back, Next, Abort and field/list are all reachable. Arrow navigation remains available.
+- Password and confirmation inputs always start blank, including retries and Back navigation; saved masked values are never prefilled.
+- Explicit foreground colors make the orange/green theme consistent across menus and Terminal profiles. Text inputs use a compact selection-style highlight instead of a full-width inverse bar.
+- Rebuilt review rendering as an aligned centered table with section dividers, neutral values and scroll-position count.
+- Removed bracketed progress markers. Verbose installation ends with a checklist of completed stages/tools; incomplete Tailscale authentication is a warning, never checked off.
+- Bootstrap guest Bash in C.UTF-8 before generating the selected locale to avoid inheriting a locale that does not yet exist.
+- Updated README, guide and immutable launcher.
+
+Validation: all 37 local tests pass; host and embedded installer Bash syntax pass. Real curses checks verified password submission and orange/green colors at 80×24 and 93×24, plus review rendering at 93×24. Full live Proxmox provisioning of this release has not been performed.
+
 ## Debian LXC Wizard 0.1.10 — 2026-10-28
 
 - Root disk initially 10 GiB.
