@@ -2,6 +2,14 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.16 — 2026-10-28
+
+- Selecting all packages immediately focuses Next. Individual package choices keep focus in the list so multiple selections can be made.
+- Clear all keeps focus in the list; the existing required-selection stop remains. Up from Next returns to the list to adjust choices.
+- Updated README, guide and immutable launcher.
+
+Validation: Bash syntax and all 44 local tests pass, including Select all focus, individual toggles and Clear all focus behavior. Live Proxmox provisioning has not been repeated for this navigation change.
+
 ## Debian LXC Wizard 0.1.15 — 2026-10-28
 
 - Single-choice selections immediately move focus to Next after Space or Enter selects a row. Press Enter again to continue. Applies to bridge, IPv4/IPv6 modes, storage and template selectors.
