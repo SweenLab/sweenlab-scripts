@@ -69,7 +69,8 @@ main() {
     CTID=$(ask 'Step 1 · New container ID (must be unused cluster-wide)' "$(pvesh get /cluster/nextid)")
     number "$CTID" 100 999999999 || die 'Invalid container ID.'
     pvesh get /cluster/nextid --vmid "$CTID" >/dev/null || die 'Container ID is unavailable.'
-    hostname=$(ask 'Step 2 · Hostname (one DNS label)' sweenlab-debian)
+    hostname=$(ask 'Step 2 · Hostname (required; one DNS label)' '')
+    [[ -n "$hostname" ]] || die 'Hostname is required. Enter a hostname to continue.'
     [[ ${#hostname} -le 63 && "$hostname" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]] || die 'Invalid hostname.'
     tags=$(ask 'Step 3 · Tags separated by semicolons (blank for none)' '')
     [[ -z "$tags" || "$tags" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.+-]*(\;[a-zA-Z0-9_][a-zA-Z0-9_.+-]*)*$ ]] || die 'Invalid tags.'

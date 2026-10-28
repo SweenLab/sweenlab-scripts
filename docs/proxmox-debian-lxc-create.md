@@ -19,7 +19,7 @@ The launch command explicitly downloads and runs this SweenLab script. You can i
 There is no Default/Advanced shortcut. Suggested input values remain editable and every configuration stage is shown. All package checkboxes initially start off.
 
 1. Choose the container ID. The wizard checks availability cluster-wide.
-2. Enter hostname.
+2. Enter a hostname. The field starts blank; a hostname is required. Leaving it empty stops the wizard before container creation.
 3. Enter tags, separated by semicolons, or explicitly leave blank.
 4. Configure networking: discovered Linux bridge; DHCP, static or manual IPv4; manual, SLAAC, DHCPv6 or static IPv6; gateways; VLAN; MTU; MAC; network rate limit; interface firewall flag; DNS server and search domain.
 5. Choose CPU cores, CPU limit and weight, RAM, swap, disk size, root storage, and timezone. Locale setup uses `en_US.UTF-8`.
