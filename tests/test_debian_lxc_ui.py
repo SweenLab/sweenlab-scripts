@@ -179,14 +179,16 @@ class TerminalUiTests(unittest.TestCase):
 
     def test_storage_requires_explicit_single_selection(self):
         options = [('local', ''), ('storage4tb', '')]
-        keys = [curses.KEY_RIGHT, '\n', curses.KEY_DOWN, ' ', curses.KEY_RIGHT, '\n']
+        keys = [curses.KEY_RIGHT, '\n', curses.KEY_DOWN, ' ', '\n']
         result, drawn = self.drive('select', keys, '', options)
         self.assertEqual(result, ('next', 'storage4tb'))
         self.assertIn('Select one option before continuing.', drawn)
         self.assertIn('( ) local', drawn)
         self.assertIn('(x) storage4tb', drawn)
-        keys = [' ', curses.KEY_DOWN, ' ', curses.KEY_RIGHT, '\n']
+        keys = [' ', curses.KEY_UP, curses.KEY_DOWN, ' ', '\n']
         self.assertEqual(self.drive('select', keys, '', options)[0], ('next', 'storage4tb'))
+        for select_key in (' ', '\n'):
+            self.assertEqual(self.drive('select', [select_key, '\n'], '', options)[0], ('next', 'local'))
 
     def test_storage_preserves_selection_on_return_and_allows_back(self):
         options = [('local', ''), ('storage4tb', '')]

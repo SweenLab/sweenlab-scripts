@@ -2,7 +2,7 @@
 # SweenLab Debian LXC Creation Wizard — MIT
 # https://github.com/SweenLab/personal-proxmox-scripts
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.14
+SCRIPT_VERSION=0.1.15
 COMPLETED=()
 CTID='' CREATED=0 LOG='' TMP='' UI_DIR='' UI_ACTION='' UI_VALUE=''
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
@@ -614,7 +614,7 @@ def run(screen, kind, title, prompt, seed, options):
         if kind == 'check':
             hint = 'Arrows: navigate | Right: buttons | Space: select | Enter: next | Esc: abort'
         if kind == 'select':
-            hint = 'Up/Down: highlight | Space/Enter: select | Tab: buttons | Esc: abort'
+            hint = 'Up/Down: highlight | Space/Enter: select → Next | Tab: buttons | Esc: abort'
         if selection_error:
             write(height - 3, 3, selection_error, accent | curses.A_BOLD)
         if kind == 'review':
@@ -675,6 +675,8 @@ def run(screen, kind, title, prompt, seed, options):
                 if kind == 'select' and key in (' ', '\n', '\r', curses.KEY_ENTER):
                     choice = tags[row] if tags else ''
                     selection_error = ''
+                    if choice:
+                        focus, button = 'buttons', 1
                     continue
                 if key == ' ' and kind == 'check' and options:
                     selection_error = ''
