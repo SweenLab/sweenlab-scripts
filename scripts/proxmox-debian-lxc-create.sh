@@ -2,7 +2,7 @@
 # SweenLab Debian LXC Creation Wizard — MIT
 # https://github.com/SweenLab/personal-proxmox-scripts
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.15
+SCRIPT_VERSION=0.1.16
 COMPLETED=()
 CTID='' CREATED=0 LOG='' TMP='' UI_DIR='' UI_ACTION='' UI_VALUE=''
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
@@ -684,7 +684,11 @@ def run(screen, kind, title, prompt, seed, options):
                     if tag == '__all__':
                         all_tags = set(tags) - {'__all__', '__none__'}
                         selected.discard('__none__')
-                        selected = selected - all_tags if all_tags <= selected else selected | all_tags
+                        if all_tags <= selected:
+                            selected -= all_tags
+                        else:
+                            selected |= all_tags
+                            focus, button = 'buttons', 1
                     elif tag == '__none__':
                         selected = set() if '__none__' in selected else {'__none__'}
                     elif '__none__' not in selected:

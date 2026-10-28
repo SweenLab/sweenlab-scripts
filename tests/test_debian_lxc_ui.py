@@ -90,7 +90,7 @@ class TerminalUiTests(unittest.TestCase):
     def test_select_all_and_clear_all_excludes_action_from_result(self):
         options = [('__all__', 'Select all / clear all'), ('git', 'Git'), ('python3', 'Python')]
         self.assertEqual(self.drive('check', [' ', '\n'], '', options)[0], ('next', 'git\npython3'))
-        self.assertEqual(self.drive('check', [' ', ' ', '\n'], '', options)[0], ('next', ''))
+        self.assertEqual(self.drive('check', [' ', curses.KEY_UP, ' ', '\n'], '', options)[0], ('next', ''))
 
     def test_orange_green_theme_and_readable_highlight(self):
         screen = Screen(['\n'])
@@ -201,6 +201,14 @@ class TerminalUiTests(unittest.TestCase):
             result = self.ui.run(screen, 'check', 'Devices (required)', 'Choose devices', '', [('gpu0', '')])
         self.assertEqual(result, ('next', 'gpu0'))
         self.assertIn('Select at least one option before continuing.', screen.drawn)
+
+    def test_select_all_focuses_next_but_individual_choices_do_not(self):
+        options = [('__all__', 'Select all / clear all'), ('git', 'Git'), ('python3', 'Python')]
+        self.assertEqual(self.drive('check', [' ', '\n'], '', options)[0], ('next', 'git\npython3'))
+        keys = [curses.KEY_DOWN, ' ', curses.KEY_DOWN, ' ', '\n']
+        self.assertEqual(self.drive('check', keys, '', options)[0], ('next', 'git\npython3'))
+        keys = [' ', curses.KEY_UP, ' ', curses.KEY_DOWN, ' ', '\n']
+        self.assertEqual(self.drive('check', keys, '', options)[0], ('next', 'git'))
 
     def test_no_default_for_optional_features(self):
         self.assertEqual(self.drive('yesno', ['\n'], '0')[0], ('next', '0'))
