@@ -2,6 +2,16 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.3 — 2026-10-28
+
+- Fixed the network bridge menu listing Docker and temporary per-guest firewall bridges.
+- Read active Linux bridges from the Proxmox node network API, preserving custom configured bridge names rather than restricting choices to `vmbr*`.
+- Explicitly exclude Docker and Proxmox firewall runtime bridge names, sort choices naturally, and verify the selected bridge belongs to the eligible list.
+- Stop with a clear message if network discovery fails or no eligible bridge exists; do not fall back to listing every runtime bridge.
+- Updated the README, guide, and version-specific launch command.
+
+Validation: fixtures reproduce the reported mixed bridge list, verify `vmbr0`/`vmbr1` and custom configured bridges are kept, and check API errors, malformed responses, no eligible bridge, and invalid selection. Existing simulated creation/cancellation/failure and single-file launch checks pass. Live Proxmox validation is still required; no running guest or host networking was changed.
+
 ## Debian LXC Wizard 0.1.2 — 2026-10-28
 
 - Removed the prefilled `sweenlab-debian` hostname. The field starts blank; an empty hostname stops the wizard before creation with a clear required-field error.

@@ -1,16 +1,16 @@
 # SweenLab Debian LXC Creation Wizard
 
-Version 0.1.2 (initial test build). A step-by-step Debian LXC wizard with selectable packages and explicit container feature and device choices. Live Proxmox testing is still required.
+Version 0.1.3 (initial test build). A step-by-step Debian LXC wizard with selectable packages and explicit container feature and device choices. Live Proxmox testing is still required.
 
 ## Quick Start: copy and paste
 
 Use the copy button in the top-right corner of the command block below, then paste the command into your **Proxmox node shell as root**. No cloning or companion file is needed:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/cad7d6686d98ac158abea982a548ed5d344414f7/scripts/proxmox-debian-lxc-create.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/13c446679ede9a9d30228a94b41dea0cb9d14785/scripts/proxmox-debian-lxc-create.sh)"
 ```
 
-This command is pinned to the verified version 0.1.2 commit, avoiding stale copies of the main-branch download. The link should be updated when a newer script version is published.
+This command is pinned to the verified version 0.1.3 commit, avoiding stale copies of the main-branch download. The link should be updated when a newer script version is published.
 
 The wizard contains its guest setup code. After final confirmation it writes that embedded code to a temporary host file, copies it into the newly created CT, runs it there, and removes the temporary host file on exit. The saved copy inside the CT supports reviewed retries. No second script is fetched from the internet.
 
@@ -23,7 +23,7 @@ There is no Default/Advanced shortcut. Suggested input values remain editable an
 1. Choose the container ID. The wizard checks availability cluster-wide.
 2. Enter a hostname. The field starts blank; a hostname is required. Leaving it empty stops the wizard before container creation.
 3. Enter tags, separated by semicolons, or explicitly leave blank.
-4. Configure networking: discovered Linux bridge; DHCP, static or manual IPv4; manual, SLAAC, DHCPv6 or static IPv6; gateways; VLAN; MTU; MAC; network rate limit; interface firewall flag; DNS server and search domain.
+4. Configure networking: active configured Proxmox Linux bridge (runtime Docker/firewall bridges are hidden); DHCP, static or manual IPv4; manual, SLAAC, DHCPv6 or static IPv6; gateways; VLAN; MTU; MAC; network rate limit; interface firewall flag; DNS server and search domain.
 5. Choose CPU cores, CPU limit and weight, RAM, swap, disk size, root storage, and timezone. Locale setup uses `en_US.UTF-8`.
 6. Choose unprivileged or privileged mode. Provide an optional SSH public key file. Choose whether to set a root console password; it is collected secretly and never written to the plan or log. SSH password access is not enabled by the wizard.
 7. Choose whether to refresh the official Proxmox template catalog, then Debian 12 or 13, exact matching template, and template storage.
@@ -43,7 +43,7 @@ Choose Cancel or Esc on an input/menu to stop. No at final confirmation exits wi
 3. Use a terminal at least 80 columns by 24 rows.
 4. Make sure `whiptail`, `python3`, and the normal Proxmox tools are available. The script reports missing dependencies; it never installs host packages automatically.
 5. Copy and paste the command from [Quick Start](#quick-start-copy-and-paste).
-6. Use a new disposable container ID. First test cancellation at the final review, then rerun to create the disposable CT.
+6. At the bridge step, select your configured Proxmox bridge (for example `vmbr0` or `vmbr1`). Docker and temporary firewall bridges are excluded. Use a new disposable container ID. First test cancellation at the final review, then rerun to create the disposable CT.
 7. For Docker, select Compose, unprivileged mode, nesting and keyctl. Validate inside the CT:
 
    ```bash
