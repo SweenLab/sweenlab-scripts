@@ -26,7 +26,7 @@ Create a Debian 12 or 13 LXC through a fully guided, step-by-step wizard. Every 
 |---------|---------|---------------|
 | [Debian LXC Creation Wizard](scripts/proxmox-debian-lxc-create.sh) | Choose container ID, hostname, tags, networking, resources, packages, features and optional device passthrough. | [View Guide](docs/proxmox-debian-lxc-create.md) |
 
-The companion [Debian tools installer](scripts/sweenlab-debian-tools.sh) runs inside the new container. Keep both scripts together in `scripts/`.
+The installer is embedded in this single script and runs inside the new container.
 
 ## Features
 
@@ -40,26 +40,19 @@ The companion [Debian tools installer](scripts/sweenlab-debian-tools.sh) runs in
 
 ## Quick Start
 
-On the Proxmox host, clone the repository and inspect both scripts:
+Paste this into the Proxmox node shell as root:
 
 ```bash
-git clone https://github.com/SweenLab/personal-proxmox-scripts.git
-cd personal-proxmox-scripts
-less scripts/proxmox-debian-lxc-create.sh
-less scripts/sweenlab-debian-tools.sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/main/scripts/proxmox-debian-lxc-create.sh)"
 ```
 
-Then run the creation wizard as root:
+This downloads and runs the SweenLab wizard. All menus and the final creation confirmation remain interactive. The guest installer is embedded; no companion file or additional shell script download is required.
 
-```bash
-bash scripts/proxmox-debian-lxc-create.sh
-```
-
-The creation wizard runs on the Proxmox host. The companion tools installer runs only inside the intended Debian LXC. Follow the [step-by-step guide](docs/proxmox-debian-lxc-create.md) for prerequisites, passthrough permissions, retries and testing.
+For a first test, choose a new disposable container ID. Follow the [step-by-step guide](docs/proxmox-debian-lxc-create.md) for prerequisites, passthrough permissions, retries and testing. You can inspect the script on GitHub before running it.
 
 ## Testing Status
 
-Version 0.1.0 is an initial test build. Bash syntax and simulated workflow checks pass; live Proxmox, Docker, Tailscale and GPU validation is still required. Start with a disposable container.
+Version 0.1.1 is an initial test build. Bash syntax and simulated workflow checks pass; live Proxmox, Docker, Tailscale and GPU validation is still required. Start with a disposable container.
 
 ## Documentation
 

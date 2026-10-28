@@ -1,15 +1,18 @@
 # SweenLab Debian LXC Creation Wizard
 
-Version 0.1.0 (initial test build). A step-by-step Debian LXC wizard with selectable packages and explicit container feature and device choices. Live Proxmox testing is still required.
+Version 0.1.1 (initial test build). A step-by-step Debian LXC wizard with selectable packages and explicit container feature and device choices. Live Proxmox testing is still required.
 
-## Files
+## Single-file launcher
 
-Keep these two scripts in the same directory:
+Paste this in the Proxmox host shell as root:
 
-- `scripts/proxmox-debian-lxc-create.sh`: runs on the Proxmox host.
-- `scripts/sweenlab-debian-tools.sh`: copied into the new container and run there.
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/main/scripts/proxmox-debian-lxc-create.sh)"
+```
 
-Do not run the tools installer on the Proxmox host. It explicitly refuses a Proxmox host and requires an LXC environment.
+The wizard contains its guest setup code. After final confirmation it writes that embedded code to a temporary host file, copies it into the newly created CT, runs it there, and removes the temporary host file on exit. The saved copy inside the CT supports reviewed retries. No second script is fetched from the internet.
+
+The launch command explicitly downloads and runs this SweenLab script. You can inspect it on GitHub first. Docker and Tailscale are installed through signed package repositories; their convenience shell scripts are not used.
 
 ## Step-by-step workflow
 
@@ -33,16 +36,11 @@ Choose Cancel or Esc on an input/menu to stop. No at final confirmation exits wi
 
 ## First test on Proxmox
 
-1. Review both scripts, especially the final execution plan and vendor repository setup.
-2. Copy both reviewed files to a directory on the Proxmox host, for example `/root/sweenlab-lxc-review/`. Do not execute a downloaded URL directly.
-3. Open the node's shell as root. Use a terminal at least 80 columns by 24 rows.
+1. Review the script, especially the execution plan and embedded guest setup.
+2. Open the Proxmox node shell as root.
+3. Use a terminal at least 80 columns by 24 rows.
 4. Make sure `whiptail`, `python3`, and the normal Proxmox tools are available. The script reports missing dependencies; it never installs host packages automatically.
-5. Change to the directory containing the two files and run:
-
-   ```bash
-   bash proxmox-debian-lxc-create.sh
-   ```
-
+5. Paste the single-file launch command above.
 6. Use a new disposable container ID. First test cancellation at the final review, then rerun to create the disposable CT.
 7. For Docker, select Compose, unprivileged mode, nesting and keyctl. Validate inside the CT:
 
@@ -69,7 +67,7 @@ Choose Cancel or Esc on an input/menu to stop. No at final confirmation exits wi
 - A root console password does not enable SSH root password authentication. With no password, use the Proxmox console through `pct enter`; an installed SSH server still follows Debian's SSH policy. Selecting sudo does not create a user or grant permissions.
 - Logs are written beneath `/var/log/sweenlab-debian-lxc/` with restrictive permissions. Installer hash, settings and command output are recorded; passwords and Tailscale credentials are excluded.
 - Failures preserve the newly created container and any downloaded template. No destroy, forced stop, automatic rollback, reboot, prune or changes to an existing container are performed. A partially failed `pct create` can leave state even before the created flag is set: inspect the requested ID before retrying.
-- Creation is intentionally not a repeat-on-existing-ID operation. Reusing an ID is rejected. The tools installer is rerunnable: managed repository files are rewritten consistently, installed packages remain installed, and no Docker data or Tailscale identity is removed. Re-running can install newer available package versions.
+- Creation is intentionally not a repeat-on-existing-ID operation. Reusing an ID is rejected. The embedded tools installer is rerunnable: managed repository files are rewritten consistently, installed packages remain installed, and no Docker data or Tailscale identity is removed. Re-running can install newer available package versions.
 - Conflicting distribution Docker packages or an independently managed vendor repository require manual review rather than automatic removal. Retry support is intended for this wizard's newly created CT, not arbitrary existing guests.
 
 ## Retry an interrupted tools installation
