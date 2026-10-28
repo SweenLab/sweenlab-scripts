@@ -2,6 +2,14 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.5 — 2026-10-28
+
+- Fixed the wizard's private `umask 077` leaking into Proxmox commands. Container commands now use a scoped `022` mask so newly created CT paths can be traversed by mapped container root; private wizard files keep their restrictive permissions.
+- Reject CT IDs with leftover host directories or symlinks before creation, without changing or deleting existing state.
+- Updated the guide with the identified extraction failure cause and a fresh-ID test procedure. Updated README and guide launchers to the immutable corrected script commit.
+
+Validation: all 22 local tests pass, including reproduction of the original `0700` directories with Proxmox's Perl directory-creation mechanism, corrected `0755` modes, private `0600` files, preserved failure statuses, and leftover-directory/symlink rejection. Bash syntax passes. Live Proxmox creation and package installation remain to be tested.
+
 ## Debian LXC Wizard 0.1.4 — 2026-10-28
 
 - Replaced one-way menus with an embedded terminal UI: Back on every configuration screen, remembered values, horizontal Back/Yes/No/Abort controls, Yes initially highlighted, and a grouped Back/Create/Abort overview.

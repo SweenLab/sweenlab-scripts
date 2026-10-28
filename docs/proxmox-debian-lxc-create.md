@@ -1,16 +1,16 @@
 # SweenLab Debian LXC Creation Wizard
 
-Version 0.1.4 (initial test build). One self-contained script, fully step by step, with Back navigation and a final Create/Abort review. Live Proxmox testing is still required.
+Version 0.1.5 (initial test build). One self-contained script, fully step by step, with Back navigation and a final Create/Abort review. Live Proxmox testing is still required.
 
 ## Quick Start: copy and paste
 
 Use the copy button in the top-right corner of this block, then paste into your **Proxmox node shell as root**:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/5b5c23b973d471f085eca94edf77c102eb9bc786/scripts/proxmox-debian-lxc-create.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/f276e03a472971e2b7979b801abbb2c4851a0297/scripts/proxmox-debian-lxc-create.sh)"
 ```
 
-The command is pinned to the verified version 0.1.4 script to avoid stale raw GitHub main-branch downloads. No clone, companion file, or additional shell-script download is needed.
+The command is pinned to the verified version 0.1.5 script to avoid stale raw GitHub main-branch downloads. No clone, companion file, or additional shell-script download is needed.
 
 If an older wizard is still open, abort it and restart with this command. Use a new disposable CT ID for the first test. Do not reuse an ID left by a failed creation until its state has been inspected.
 
@@ -108,9 +108,11 @@ The reported error:
 tar: /var/lib/lxc/204/rootfs: Cannot open: Permission denied
 ```
 
-occurs inside Proxmox's template extraction, before this wizard can start the container or run its guest setup. It does not establish which path component, ACL, or mounted filesystem caused the denial. Proxmox's unprivileged extraction runs with container-root mapped to a host UID (100000 with this wizard's default mapping).
+occurs inside Proxmox's template extraction, before guest setup. The wizard through version 0.1.4 passed its private-file `umask 077` to Proxmox. Proxmox's directory creation respects that mask, producing `0700` CT directories that mapped container root (host UID 100000) cannot traverse. This matches the reported root-owned `0700` directories.
 
-Version 0.1.4 adds a read-only namespace traversal preflight for `/var`, `/var/lib`, and `/var/lib/lxc`. If mapped container root cannot traverse a parent, creation stops and names that path. This detects a common cause; it cannot prove that the future mounted root filesystem will allow extraction.
+Version 0.1.5 runs Proxmox container commands in a subshell with `umask 022`, while logs and UI files retain their private mask. A regression test reproduces the old `0700` behavior with Perl's `File::Path::make_path` and verifies the corrected `0755` directories, private `0600` log files, and command status preservation. This has not yet been validated by creating a container on a live Proxmox host.
+
+Choose a fresh unused CT ID for the next test. The wizard rejects IDs with leftover `/var/lib/lxc/ID` directories or symlinks, even when no CT configuration exists. Existing failed directories and disks are left untouched for separate inspection. The read-only mapped-root traversal preflight remains in place.
 
 If `pct create` still fails, the wizard prints path/mount diagnostics, identifies the failed CT ID, and preserves any remaining state. It does **not** chmod/chown host directories, change ACLs, disable security protections, destroy the CT, or retry as privileged.
 
@@ -123,7 +125,7 @@ findmnt -T /mnt/4tbstorage -o TARGET,SOURCE,FSTYPE,OPTIONS
 pct config 204
 ```
 
-Some paths or the CT configuration may no longer exist after Proxmox's own cleanup. Do not run another creation with ID 204 until the remaining configuration/storage has been inspected. Share the diagnostic output and host log to identify the actual permission problem before applying a repair.
+Some paths or the CT configuration may no longer exist after Proxmox's own cleanup. Do not run another creation with ID 204 until the remaining configuration/storage has been inspected. Use a fresh ID to test the corrected release; inspect old storage separately before deciding whether to remove it.
 
 ## Logs, safety, and retry behavior
 
