@@ -4,7 +4,7 @@
 # License: MIT
 # Run the reviewed local file on a Proxmox VE host, as root.
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.2
+SCRIPT_VERSION=0.1.3
 INSTALLER=''
 CTID='' CREATED=0 LOG='' TMP=''
 DIALOG_HEIGHT=20 DIALOG_WIDTH=76 LIST_HEIGHT=11
@@ -31,6 +31,31 @@ yesno() {
 }
 menu() { local prompt=$1; shift; whiptail --title 'SweenLab · Step by step' --menu "$prompt" "$DIALOG_HEIGHT" "$DIALOG_WIDTH" "$LIST_HEIGHT" "$@" 3>&1 1>&2 2>&3; }
 number() { [[ "$1" =~ ^[1-9][0-9]{0,8}$ ]] && (( 10#$1 >= $2 && 10#$1 <= $3 )); }
+# Use Proxmox's configured network inventory, not every runtime Linux bridge.
+configured_linux_bridges() {
+    local network_json
+    network_json=$(pvesh get "/nodes/$(hostname -s)/network" --type bridge --output-format json) ||
+        die 'Could not read Proxmox network configuration.'
+    python3 -c '
+import json, re, sys
+networks = json.load(sys.stdin)
+if not isinstance(networks, list):
+    raise SystemExit("Invalid Proxmox network response.")
+bridges = set()
+for entry in networks:
+    name = entry.get("iface", "")
+    if entry.get("type") != "bridge" or entry.get("active") not in (1, True):
+        continue
+    if not re.fullmatch(r"[A-Za-z0-9_.:-]+", name):
+        continue
+    if re.fullmatch(r"docker[0-9]+|br-[0-9a-fA-F]+|fwbr[0-9]+i[0-9]+", name):
+        continue
+    bridges.add(name)
+for name in sorted(bridges, key=lambda value: [int(part) if part.isdigit() else part for part in re.split(r"([0-9]+)", value)]):
+    print(name)
+' <<< "$network_json"
+}
+
 choose_storage() {
     local content=$1 line; local -a choices=()
     while read -r line; do
@@ -61,7 +86,7 @@ main() {
     flock -n 9 || die 'Another SweenLab creation wizard is running.'
     printf '\nSweenLab Debian LXC Creation Wizard %s\n' "$SCRIPT_VERSION"
     local release template_store root_store template arch item pct_help
-    local hostname tags cores memory swap disk bridge ip gateway='' vlan mtu dns search tz
+    local bridge_names hostname tags cores memory swap disk bridge ip gateway='' vlan mtu dns search tz
     local unpriv nesting=0 onboot protection firewall keyfile upgrade=0 net features selected
     local ipmode ip6mode ip6 gateway6='' mac rate cpulimit cpuunits startup tun=0 fuse=0 keyctl=0
     local password='' password2='' device gid device_index=0
@@ -74,11 +99,17 @@ main() {
     [[ ${#hostname} -le 63 && "$hostname" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]] || die 'Invalid hostname.'
     tags=$(ask 'Step 3 · Tags separated by semicolons (blank for none)' '')
     [[ -z "$tags" || "$tags" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.+-]*(\;[a-zA-Z0-9_][a-zA-Z0-9_.+-]*)*$ ]] || die 'Invalid tags.'
-    for item in /sys/class/net/*; do
-        [[ ! -d "$item/bridge" ]] || bridges+=("${item##*/}" 'Linux bridge')
-    done
-    ((${#bridges[@]})) || die 'No Linux bridge found.'
+    bridge_names=$(configured_linux_bridges)
+    while IFS= read -r item; do
+        [[ -z "$item" ]] || bridges+=("$item" 'Configured Proxmox Linux bridge')
+    done <<< "$bridge_names"
+    ((${#bridges[@]})) || die 'No active configured Proxmox Linux bridge found. Apply the bridge configuration in Proxmox and rerun.'
     bridge=$(menu 'Step 4 · Network bridge' "${bridges[@]}")
+    local bridge_allowed=0
+    while IFS= read -r item; do
+        if [[ "$bridge" == "$item" ]]; then bridge_allowed=1; break; fi
+    done <<< "$bridge_names"
+    (( bridge_allowed )) || die 'Select a configured bridge from the list.'
     ipmode=$(menu 'IPv4 configuration' dhcp 'DHCP' static 'Static address and gateway' manual 'No automatic IPv4 configuration')
     case "$ipmode" in
         dhcp) ip=dhcp;; manual) ip=manual;;
