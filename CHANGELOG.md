@@ -2,6 +2,14 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.12 — 2026-10-28
+
+- Added a persistent centered grey input box to text and password screens. Empty fields remain visible, including when focus moves to buttons.
+- Visible brackets provide a monochrome fallback; long input scrolls inside the box and passwords remain masked.
+- Updated README, guide and immutable launcher.
+
+Validation: Bash syntax and all 38 local tests pass, including empty-field visibility and persistence. Real curses password submission passes at 80×24 and 93×24; review smoke check passes at 93×24. Live Proxmox provisioning has not been repeated for this visual change.
+
 ## Debian LXC Wizard 0.1.11 — 2026-10-28
 
 - Fixed Tab/Shift+Tab order so Back, Next, Abort and field/list are all reachable. Arrow navigation remains available.

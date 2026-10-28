@@ -1,16 +1,16 @@
 # SweenLab Debian LXC Creation Wizard
 
-Version 0.1.11 (initial test build). One self-contained script, fully step by step, with Back navigation and a final Create/Abort review. Live Proxmox testing is still required.
+Version 0.1.12 (initial test build). One self-contained script, fully step by step, with Back navigation and a final Create/Abort review. Live Proxmox testing is still required.
 
 ## Quick Start: copy and paste
 
 Use the copy button in the top-right corner of this block, then paste into your **Proxmox node shell as root**:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/f78511fd1ff6c6e9b6e17daa4c89db1b6576dba9/scripts/proxmox-debian-lxc-create.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/fcdc435763989b38fac1ed2d3954e14c190db130/scripts/proxmox-debian-lxc-create.sh)"
 ```
 
-The command is pinned to the verified version 0.1.11 script to avoid stale raw GitHub main-branch downloads. No clone, companion file, or additional shell-script download is needed.
+The command is pinned to the verified version 0.1.12 script to avoid stale raw GitHub main-branch downloads. No clone, companion file, or additional shell-script download is needed.
 
 If an older wizard is still open, abort it and restart with this command. Use a new disposable CT ID for the first test. Do not reuse an ID left by a failed creation until its state has been inspected.
 
@@ -35,7 +35,7 @@ Every configuration screen has **Back** and **Abort**. Input, menu, and package 
 
 After Create, provisioning begins and Back navigation ends. Failures preserve any remaining new CT/storage state for inspection; the wizard never destroys it automatically.
 
-The UI centers prompts, fields and choices, with required prompts and choices in bold. It explicitly sets orange headings/buttons, green prompts/choices, soft green focused selections, and neutral body text rather than inheriting the Terminal profile foreground. Text inputs use the same compact focused highlight as selection items, without a full-width inverse bar. Creation progress uses emojis and colored stage indicators in quiet and verbose modes. Terminals without color support fall back to monochrome; `NO_COLOR=1` also disables color.
+The UI centers prompts, fields and choices, with required prompts and choices in bold. It explicitly sets orange headings/buttons, green prompts/choices, soft green focused selections, and neutral body text rather than inheriting the Terminal profile foreground. Text and password inputs have a persistent centered grey box, including when empty or when a button has focus. Visible brackets keep the input area identifiable in monochrome. Typed text stays within the box; passwords stay masked. Creation progress uses emojis and colored stage indicators in quiet and verbose modes. Terminals without color support fall back to monochrome; `NO_COLOR=1` also disables color.
 
 ## Configuration screens
 
@@ -111,7 +111,7 @@ tar: /var/lib/lxc/204/rootfs: Cannot open: Permission denied
 
 occurs inside Proxmox's template extraction, before guest setup. The wizard through version 0.1.4 passed its private-file `umask 077` to Proxmox. Proxmox's directory creation respects that mask, producing `0700` CT directories that mapped container root (host UID 100000) cannot traverse. This matches the reported root-owned `0700` directories.
 
-Version 0.1.11 runs Proxmox container commands in a subshell with `umask 022`, while logs and UI files retain their private mask. A regression test reproduces the old `0700` behavior with Perl's `File::Path::make_path` and verifies the corrected `0755` directories, private `0600` log files, and command status preservation. This has not yet been validated by creating a container on a live Proxmox host.
+Version 0.1.12 runs Proxmox container commands in a subshell with `umask 022`, while logs and UI files retain their private mask. A regression test reproduces the old `0700` behavior with Perl's `File::Path::make_path` and verifies the corrected `0755` directories, private `0600` log files, and command status preservation. This has not yet been validated by creating a container on a live Proxmox host.
 
 Choose a fresh unused CT ID for the next test. The wizard validates the ID format and checks that no VM or CT uses it through Proxmox. Leftover directories alone do not block selection or trigger a separate pre-creation rejection; Proxmox handles creation errors. Existing failed directories and disks are left untouched for separate inspection. The read-only mapped-root traversal preflight remains in place.
 
@@ -151,7 +151,7 @@ That retry example applies only after the CT has been created and the installer 
 
 ## Validation and release history
 
-Local checks cover bridge filtering, cached-template filtering through the real configuration flow, required hostname/passwords, Back preserving values, abort-before-mutation, hidden defaults, Tailscale flags/auth-output isolation, namespace preflight failure, creation diagnostics, and installer-failure preservation. UI rendering/key-handling tests cover the button layouts, defaults, masking, selections, and navigation. All 37 local checks pass for this release. Real curses pseudo-terminal smoke checks cover blank password submission at 80×24 and 93×24, plus review rendering at 93×24, with the orange/green color sequences verified. Checklist tests cover successful installation and incomplete Tailscale authentication.
+Local checks cover bridge filtering, cached-template filtering through the real configuration flow, required hostname/passwords, Back preserving values, abort-before-mutation, hidden defaults, Tailscale flags/auth-output isolation, namespace preflight failure, creation diagnostics, and installer-failure preservation. UI rendering/key-handling tests cover the button layouts, defaults, masking, selections, and navigation. All 38 local checks pass for this release. Real curses pseudo-terminal smoke checks cover blank password submission at 80×24 and 93×24, plus review rendering at 93×24, with the orange/green color sequences verified. Checklist tests cover successful installation and incomplete Tailscale authentication.
 
 These are simulated/terminal checks, not a successful live Proxmox installation. Live extraction, packages, Docker workloads, Tailscale login, GPU access, and your host's actual permissions remain to be validated.
 
