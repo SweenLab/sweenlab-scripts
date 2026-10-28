@@ -26,6 +26,7 @@ class WorkflowTests(unittest.TestCase):
             env = dict(os.environ, FIXTURE=str(d), SCENARIO=scenario)
             code = '''source "$FIXTURE/wizard.sh"
 gpu_names=''
+UI_DIR=$FIXTURE/ui; mkdir -p "$UI_DIR"
 nproc() { echo 8; }
 dpkg() { echo amd64; }
 timedatectl() { echo UTC; }
@@ -66,11 +67,12 @@ ui() {
     UI_ACTION=next; UI_VALUE=$4
     [[ "$SCENARIO" != abort ]] || { UI_ACTION=abort; return; }
     case "$key" in
+        ip) [[ "$4" != dhcp ]] || exit 94; UI_VALUE=10.10.10.204/24;;
+        locale_name) UI_VALUE=en_GB.UTF-8;;
         hostname) visits_hostname=$((visits_hostname+1)); UI_VALUE=test-debian
             if [[ "$SCENARIO" == mandatory && "$visits_hostname" == 1 ]]; then UI_VALUE=''; fi;;
         bridge) UI_VALUE=vmbr0;;
         ipmode) UI_VALUE=static;;
-        ip) UI_VALUE=10.10.10.204/24;;
         gateway) UI_VALUE=10.10.10.1;;
         root_store) UI_VALUE=storage4tb;;
         template_store) UI_VALUE=local;;
@@ -135,10 +137,13 @@ configure
         self.assertIn('<--onboot> <1> <--protection> <0>', calls)
         self.assertNotIn('<--startup>', calls)
         self.assertIn('firewall=1', calls)
-        self.assertIn('nesting=1,fuse=1,keyctl=1', calls)
+        self.assertIn('nesting=1,fuse=0,keyctl=1', calls)
         self.assertIn('path=/dev/net/tun,gid=0,uid=0,mode=0660', calls)
         self.assertIn('<--upgrade> <1>', calls)
-        self.assertIn('<tailscale> <up> <--timeout=120s> <--ssh=true> <--accept-dns=false> <--accept-routes=false> <--shields-up=false> <--qr=true>', calls)
+        self.assertIn('<--locale> <en_GB.UTF-8>', calls)
+        self.assertIn('verbose|yesno|seed=0', files['trace'])
+        self.assertIn('fuse|yesno|seed=0', files['trace'])
+        self.assertIn('<tailscale> <up> <--timeout=120s> <--ssh=true> <--accept-dns=false> <--accept-routes=false> <--shields-up=false> <--qr=false>', calls)
         self.assertIn('SECRET-AUTH-URL', files['auth-output'])
         logs = '\n'.join(value for key, value in files.items() if key.startswith('logs/'))
         self.assertNotIn('SECRET-AUTH-URL', logs)

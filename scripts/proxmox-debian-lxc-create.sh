@@ -2,7 +2,7 @@
 # SweenLab Debian LXC Creation Wizard — MIT
 # https://github.com/SweenLab/personal-proxmox-scripts
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.5
+SCRIPT_VERSION=0.1.6
 CTID='' CREATED=0 LOG='' TMP='' UI_DIR='' UI_ACTION='' UI_VALUE=''
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 cleanup() {
@@ -127,7 +127,8 @@ SOFTWARE & FEATURES
   Tailscale flags ${ts_flags_display:-not selected}
 
 AUTOMATIC SETTINGS
-  Root password required (hidden); locale en_US.UTF-8
+  Root password required (hidden); locale $locale_name
+  Verbose output  $(yes_word "$verbose")
   Package upgrades enabled; firewall interface flag enabled
   CPU limit 0; CPU weight 100; swap 512 MiB
   PVE default startup order/delays; deletion protection off
@@ -142,9 +143,10 @@ configure() {
     hostname='' tags='' bridge='' ipmode=dhcp ip='' gateway='' ip6mode=manual ip6='' gateway6=''
     vlan='' mtu=1500 mac='' rate='' dns='' search='' cores=2 memory=1024 disk=8 root_store=''
     tz=$(host_timezone); unpriv=1 keyfile='' password='' password_confirm='' template_store='' template=''
-    selected='' ts_up=1 ts_options=$'ssh\nignore-dns\nqr' nesting=1 keyctl=1 fuse=1 tun=1 gpu=1 gpu_selected='' onboot=1
+    selected='' ts_up=1 ts_options=$'ssh\nignore-dns' nesting=1 keyctl=1 fuse=0 tun=1 gpu=0 gpu_selected='' onboot=1
+    locale_name=en_US.UTF-8 verbose=0
     docker=0 tailscale=0 packages_display='' gpu_display='' ts_flags_display=''
-    local -a steps=(ctid hostname tags bridge ipmode ip gateway ip6mode ip6 gateway6 vlan mtu mac rate dns search cores memory disk root_store tz unpriv keyfile password password_confirm template_store template selected ts_up ts_options nesting keyctl fuse tun gpu gpu_selected onboot review)
+    local -a steps=(ctid hostname tags bridge ipmode ip gateway ip6mode ip6 gateway6 vlan mtu mac rate dns search cores memory disk root_store tz locale_name unpriv keyfile password password_confirm template_store template selected ts_up ts_options nesting keyctl fuse tun gpu gpu_selected onboot verbose review)
     local index=0 direction=1 key kind title prompt seed error='' names='' line old_password='' arch
     local -a options=()
     arch=$(dpkg --print-architecture)
@@ -191,6 +193,8 @@ configure() {
                 else title='Template storage'; prompt='Where are your downloaded Debian templates stored?'; names=$(list_storage vztmpl); fi
                 while IFS= read -r line; do [[ -z "$line" ]] || options+=("$line" ''); done <<< "$names"
                 if ((${#options[@]} == 0)); then kind=notice; prompt='No active storage of the required content type is available. Configure storage in Proxmox before continuing.'; fi;;
+            locale_name) title='Locale'; prompt='Guest UTF-8 locale, for example en_US.UTF-8 or en_GB.UTF-8';;
+            verbose) kind=yesno; title='Installation output'; prompt='Show verbose installation output? No shows concise progress; the full output is saved in the private log.';;
             tz) title='Timezone'; prompt='Prefilled from the Proxmox host. Edit if needed.';;
             unpriv) kind=yesno; title='Container type'; prompt='Create an unprivileged container?';;
             keyfile) title='SSH key'; prompt='Optional host path to an SSH public key file; leave blank to skip';;
@@ -203,11 +207,11 @@ configure() {
                 if ((${#options[@]} == 0)); then kind=notice; prompt='No downloaded Debian 12/13 template for this host architecture was found here. Back selects another storage; Abort lets you download a template in Proxmox first.'; fi;;
             selected)
                 kind=check; title='Packages'; prompt='Space selects packages. Docker Compose includes Docker Engine.'
-                options=(git 'Version control' curl 'Downloads' wget 'Downloads' tailscale 'VPN and optional guided sign-in'
+                options=(__all__ 'Select all / clear all' python3 'Python 3 + pip + venv' git 'Version control' curl 'Downloads' wget 'Downloads' tailscale 'VPN and optional guided sign-in'
                     docker 'Docker Engine + Buildx' compose 'Docker Compose + Engine' nano 'Text editor' jq 'JSON tools'
                     unzip 'ZIP extraction' iputils-ping 'Ping' openssh-server 'SSH server' sudo 'sudo; no users are created');;
-            ts_up) kind=yesno; title='Tailscale sign-in'; prompt='Run tailscale up automatically after installation? The login URL/QR will appear for browser authentication.';;
-            ts_options) kind=check; title='Tailscale options'; prompt='Choose options for tailscale up. SSH access still follows your tailnet policy.'; options=(ssh 'Enable Tailscale SSH' ignore-dns 'Keep existing DNS; ignore Tailscale DNS' accept-routes 'Accept advertised subnet routes' shields-up 'Block incoming Tailscale connections' qr 'Display a login QR code');;
+            ts_up) kind=yesno; title='Tailscale sign-in'; prompt='Run tailscale up automatically after installation? The login link will appear for browser authentication.';;
+            ts_options) kind=check; title='Tailscale options'; prompt='Choose options for tailscale up. SSH access still follows your tailnet policy.'; options=(ssh 'Enable Tailscale SSH' ignore-dns 'Keep existing DNS; ignore Tailscale DNS' accept-routes 'Accept advertised subnet routes' shields-up 'Block incoming Tailscale connections');;
             nesting) kind=yesno; title='Nesting'; prompt='Enable nesting? Required for Docker; exposes additional host procfs/sysfs information.';;
             keyctl) kind=yesno; title='Keyctl'; prompt='Enable keyctl? Required for Docker in an unprivileged container.';;
             fuse) kind=yesno; title='FUSE'; prompt='Enable FUSE? It can interact with container freezing and backups.';;
@@ -244,6 +248,9 @@ configure() {
             hostname) [[ ${#hostname} -le 63 && "$hostname" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]] || error='Hostname is required; use a single valid DNS label.';;
             tags) [[ -z "$tags" || "$tags" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.+-]*(\;[a-zA-Z0-9_][a-zA-Z0-9_.+-]*)*$ ]] || error='Use valid tags separated by semicolons.';;
             bridge|root_store|template_store|template) contains_line "${!key}" "$names" || error='Choose an item from the list.';;
+            ipmode) if [[ $ipmode == static && ( $ip == dhcp || $ip == manual ) ]]; then ip=''; fi;;
+            ip6mode) if [[ $ip6mode == static && ( $ip6 == dhcp || $ip6 == manual || $ip6 == auto ) ]]; then ip6=''; fi;;
+            locale_name) [[ $locale_name =~ ^[a-zA-Z]{2,3}_[a-zA-Z]{2}\.UTF-8$ ]] || error='Enter a UTF-8 locale such as en_US.UTF-8.';;
             ip) validate_ip 4 "$ip" || error='Enter IPv4 with a prefix length.';;
             gateway) [[ -z "$gateway" ]] || validate_address 4 "$gateway" || error='Invalid IPv4 gateway.';;
             ip6) validate_ip 6 "$ip6" || error='Enter IPv6 with a prefix length.';;
@@ -283,12 +290,39 @@ configure() {
         index=$((index + 1))
     done
 }
+progress() {
+    local state=$1 message=$2 orange='' green='' reset=''
+    if [[ ${PROGRESS_COLOR:-0} == 1 && ${TERM:-dumb} != dumb && -z ${NO_COLOR:-} ]]; then
+        orange=$'\033[38;5;208m'; green=$'\033[38;5;114m'; reset=$'\033[0m'
+    fi
+    if [[ $state == OK ]]; then printf '  %s[OK]%s %s\n' "$green" "$reset" "$message"
+    else printf '  %s[..]%s %s\n' "$orange" "$reset" "$message"; fi
+}
+install_stage() {
+    local label=$1 rc=0 output
+    shift
+    progress RUN "$label"
+    if (( verbose )); then
+        "$@" || rc=$?
+    else
+        output=$(mktemp "$UI_DIR/stage.XXXXXX") || return $?
+        "$@" >"$output" 2>&1 || rc=$?
+        cat "$output" >> "$LOG"
+        if (( rc )); then tail -n 30 "$output"; fi
+        rm -f -- "$output"
+    fi
+    (( rc == 0 )) || return "$rc"
+    progress OK "$label"
+}
 execute_plan() {
+    PROGRESS_COLOR=0
+    [[ ! -t 1 ]] || PROGRESS_COLOR=1
     umask 077
     mkdir -p /var/log/sweenlab-debian-lxc
     LOG="/var/log/sweenlab-debian-lxc/$(date +%Y%m%d-%H%M%S)-$$.log"
     exec > >(tee -a "$LOG") 2>&1
-    make_plan
+    make_plan >> "$LOG"
+    printf "\n  SweenLab · Debian LXC %s\n  CT %s · %s\n\n" "$SCRIPT_VERSION" "$CTID" "$hostname"
     assert_new_ct_path
     check_extraction_access
     pvesh get /cluster/nextid --vmid "$CTID" >/dev/null
@@ -328,37 +362,37 @@ execute_plan() {
         done
     fi
     local rc=0
-    proxmox_pct create "${args[@]}" || rc=$?
+    install_stage "Create container and extract Debian" proxmox_pct create "${args[@]}" || rc=$?
     if (( rc )); then creation_diagnostics; die "Container creation failed (status $rc). Inspect CT $CTID before retrying; no automatic cleanup was performed."; fi
     CREATED=1
-    proxmox_pct start "$CTID"
+    install_stage "Start container" proxmox_pct start "$CTID"
     local ready=0 attempt
     for attempt in {1..60}; do
-        if proxmox_pct exec "$CTID" -- test -d /run/systemd/system; then ready=1; break; fi
+        if proxmox_pct exec "$CTID" -- test -d /run/systemd/system >/dev/null 2>&1; then ready=1; break; fi
         sleep 2
     done
     (( ready )) || die 'Container was not ready within 120 seconds.'
+    progress OK 'Container is ready'
     printf 'root:%s\n' "$password" | proxmox_pct exec "$CTID" -- chpasswd
     unset password password_confirm
     TMP=$(mktemp)
     write_guest_installer > "$TMP"
-    bash -n "$TMP"; sha256sum "$TMP"
-    proxmox_pct push "$CTID" "$TMP" /root/sweenlab-debian-tools.sh --perms 0700
+    bash -n "$TMP"; sha256sum "$TMP" >> "$LOG"
+    install_stage "Copy embedded installer" proxmox_pct push "$CTID" "$TMP" /root/sweenlab-debian-tools.sh --perms 0700
     while IFS= read -r item; do [[ -z "$item" ]] || tools+=("$item"); done <<< "$selected"
-    proxmox_pct exec "$CTID" -- bash /root/sweenlab-debian-tools.sh --timezone "$tz" --upgrade 1 ${tools[@]+"${tools[@]}"}
+    install_stage "Configure Debian and install selected tools" proxmox_pct exec "$CTID" -- bash /root/sweenlab-debian-tools.sh --timezone "$tz" --locale "$locale_name" --upgrade 1 ${tools[@]+"${tools[@]}"}
     if (( tailscale && ts_up )); then
-        local ssh=false accept_dns=true routes=false shields=false qr=false login_rc=0
+        local ssh=false accept_dns=true routes=false shields=false login_rc=0
         contains_line ssh "$ts_options" && ssh=true
         contains_line ignore-dns "$ts_options" && accept_dns=false
         contains_line accept-routes "$ts_options" && routes=true
         contains_line shields-up "$ts_options" && shields=true
-        contains_line qr "$ts_options" && qr=true
-        printf '\nStarting Tailscale sign-in. Complete the URL/QR in your browser.\n'
+        printf '\nStarting Tailscale sign-in. Open or copy the login link in your browser.\n'
         # Login URLs are sent only to the terminal, not the host run log.
-        proxmox_pct exec "$CTID" -- tailscale up --timeout=120s "--ssh=$ssh" "--accept-dns=$accept_dns" "--accept-routes=$routes" "--shields-up=$shields" "--qr=$qr" >/dev/tty 2>/dev/tty || login_rc=$?
+        proxmox_pct exec "$CTID" -- tailscale up --timeout=120s "--ssh=$ssh" "--accept-dns=$accept_dns" "--accept-routes=$routes" "--shields-up=$shields" --qr=false >/dev/tty 2>/dev/tty || login_rc=$?
         if (( login_rc )); then
             printf '[ATTENTION] Tailscale sign-in is incomplete; CT and packages are preserved. Retry:\n'
-            printf 'pct exec %s -- tailscale up --ssh=%s --accept-dns=%s --accept-routes=%s --shields-up=%s --qr=%s\n' "$CTID" "$ssh" "$accept_dns" "$routes" "$shields" "$qr"
+            printf 'pct exec %s -- tailscale up --ssh=%s --accept-dns=%s --accept-routes=%s --shields-up=%s --qr=false\n' "$CTID" "$ssh" "$accept_dns" "$routes" "$shields"
         fi
     fi
     printf '\n[OK] CT %s created and selected packages installed. Log: %s\n' "$CTID" "$LOG"
@@ -430,6 +464,17 @@ def button_set(kind):
 def run(screen, kind, title, prompt, seed, options):
     curses.curs_set(0)
     screen.keypad(True)
+    accent = success = highlight = 0
+    try:
+        if curses.has_colors() and not os.environ.get('NO_COLOR'):
+            curses.start_color()
+            curses.use_default_colors()
+            curses.init_pair(1, 208 if curses.COLORS >= 256 else curses.COLOR_YELLOW, -1)
+            curses.init_pair(2, 114 if curses.COLORS >= 256 else curses.COLOR_GREEN, -1)
+            curses.init_pair(3, curses.COLOR_BLACK, 114 if curses.COLORS >= 256 else curses.COLOR_GREEN)
+            accent, success, highlight = (curses.color_pair(i) for i in (1, 2, 3))
+    except curses.error:
+        pass
     text = seed
     cursor = len(text)
     tags = [tag for tag, _ in options]
@@ -459,7 +504,7 @@ def run(screen, kind, title, prompt, seed, options):
         def write(y, x, value, attr=0):
             if 0 <= y < height - 1:
                 box.addnstr(y, x, value, max(0, width - x - 2), attr)
-        write(0, 3, ' ' + title + ' ', curses.A_BOLD)
+        write(0, 3, ' ' + title + ' ', curses.A_BOLD | accent)
         lines = []
         for paragraph in prompt.splitlines():
             lines.extend(textwrap.wrap(paragraph, width - 6) or [''])
@@ -482,15 +527,16 @@ def run(screen, kind, title, prompt, seed, options):
                 visible = max(1, height - content_y - 5)
                 start = max(0, min(row - visible + 1, max(0, len(options) - visible)))
                 for idx, (tag, label) in enumerate(options[start:start + visible], start):
-                    mark = ('[x] ' if tag in selected else '[ ] ') if kind == 'check' else ''
-                    label = (label or tag) if kind == 'menu' else (tag if not label else tag + '  ' + label)
+                    checked = (set(tags) - {'__all__'} <= selected) if tag == '__all__' else tag in selected
+                    mark = ('[x] ' if checked else '[ ] ') if kind == 'check' else ''
+                    label = (label or tag) if kind == 'menu' or tag == '__all__' else (tag if not label else tag + '  ' + label)
                     write(content_y + idx - start, 3, mark + label,
-                          curses.A_REVERSE if idx == row and focus == 'content' else 0)
+                          (highlight or curses.A_REVERSE) if idx == row and focus == 'content' else (success if checked and kind == 'check' else 0))
         labels = ['< ' + value[0] + ' >' for value in buttons]
         total = sum(map(len, labels)) + 4 * (len(labels) - 1)
         x = max(2, (width - total) // 2)
         for idx, label in enumerate(labels):
-            write(height - 4, x, label, curses.A_REVERSE | curses.A_BOLD if idx == button else curses.A_NORMAL)
+            write(height - 4, x, label, (highlight or curses.A_REVERSE) | curses.A_BOLD if idx == button else accent)
             x += len(label) + 4
         hint = 'Tab: buttons | Shift+Tab: previous | Esc: abort'
         if kind == 'check':
@@ -535,7 +581,11 @@ def run(screen, kind, title, prompt, seed, options):
                     continue
                 if key == ' ' and kind == 'check' and options:
                     tag = options[row][0]
-                    selected.symmetric_difference_update([tag])
+                    if tag == '__all__':
+                        all_tags = set(tags) - {'__all__'}
+                        selected = selected - all_tags if all_tags <= selected else selected | all_tags
+                    else:
+                        selected.symmetric_difference_update([tag])
                     continue
             elif kind in ('input', 'password'):
                 if key in (curses.KEY_BACKSPACE, '\x7f', '\b'):
@@ -566,7 +616,7 @@ def run(screen, kind, title, prompt, seed, options):
             if kind == 'menu':
                 return action, tags[row] if tags else ''
             if kind == 'check':
-                return action, '\n'.join(tag for tag in tags if tag in selected)
+                return action, '\n'.join(tag for tag in tags if tag in selected and tag != '__all__')
             return action, ''
 
 
@@ -607,16 +657,17 @@ main() {
     # Debian owns this configuration file.
     . /etc/os-release
     [[ "$ID" == debian && "$VERSION_ID" =~ ^(12|13)$ ]] || fail 'Debian 12 or 13 required.'
-    local tz=America/New_York upgrade=0 docker=0 compose=0 tailscale=0 item
+    local tz=America/New_York locale_name=en_US.UTF-8 upgrade=0 docker=0 compose=0 tailscale=0 item
     local -a packages=(locales tzdata) tools=()
     while (($#)); do
         case "$1" in
-            --timezone|--upgrade)
+            --timezone|--locale|--upgrade)
                 (($# >= 2)) || fail "Missing value for $1"
-                case "$1" in --timezone) tz=$2;; --upgrade) upgrade=$2;; esac
+                case "$1" in --timezone) tz=$2;; --locale) locale_name=$2;; --upgrade) upgrade=$2;; esac
                 shift 2;;
             git|curl|wget|nano|jq|unzip|iputils-ping|openssh-server|sudo)
                 packages+=("$1"); tools+=("$1"); shift;;
+            python3) packages+=(python3 python3-pip python3-venv); tools+=(python3 python3-pip python3-venv); shift;;
             docker) docker=1; shift;;
             compose) docker=1; compose=1; shift;;
             tailscale) tailscale=1; shift;;
@@ -638,11 +689,14 @@ main() {
     if (( upgrade )); then apt-get -o Dpkg::Options::=--force-confold -y upgrade; fi
     if (( docker || tailscale )); then packages+=(ca-certificates curl gnupg); fi
     apt-get install -y --no-install-recommends "${packages[@]}"
-    if ! grep -Eq '^en_US.UTF-8[[:space:]]+UTF-8$' /etc/locale.gen; then
-        printf '\nen_US.UTF-8 UTF-8\n' >> /etc/locale.gen
+    [[ $locale_name =~ ^[a-zA-Z]{2,3}_[a-zA-Z]{2}\.UTF-8$ ]] || fail 'Invalid UTF-8 locale.'
+    local locale_source=${locale_name%.UTF-8}
+    [[ -f /usr/share/i18n/locales/$locale_source ]] || fail 'Locale is not available in Debian.'
+    if ! grep -Fxq "$locale_name UTF-8" /etc/locale.gen; then
+        printf '\n%s UTF-8\n' "$locale_name" >> /etc/locale.gen
     fi
     locale-gen
-    update-locale LANG=en_US.UTF-8
+    update-locale LANG="$locale_name"
     ln -snf "/usr/share/zoneinfo/$tz" /etc/localtime
     printf '%s\n' "$tz" > /etc/timezone
     dpkg-reconfigure -f noninteractive tzdata
@@ -701,7 +755,7 @@ REPO
     for item in ${tools[@]+"${tools[@]}"}; do
         [[ $(dpkg-query -W -f='${Status}' "$item") == 'install ok installed' ]] || fail "Verification failed: $item"
     done
-    printf '[OK] Selected tools installed; locale en_US.UTF-8; timezone %s.\n' "$tz"
+    printf '[OK] Selected tools installed; locale %s; timezone %s.\n' "$locale_name" "$tz"
 }
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi
 SWEENLAB_GUEST_INSTALLER

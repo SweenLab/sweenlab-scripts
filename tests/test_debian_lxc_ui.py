@@ -1,6 +1,7 @@
 """Check the embedded terminal UI's actual rendering and key handling."""
 import curses
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -42,7 +43,7 @@ class TerminalUiTests(unittest.TestCase):
 
     def drive(self, kind, keys, seed='', options=()):
         screen = Screen(keys)
-        with patch.object(curses, 'curs_set'):
+        with patch.object(curses, 'curs_set'), patch.object(curses, 'has_colors', return_value=False):
             result = self.ui.run(screen, kind, 'Test', 'Question', seed, options)
         return result, '\n'.join(screen.drawn)
 
@@ -81,6 +82,23 @@ class TerminalUiTests(unittest.TestCase):
     def test_checkbox_preserves_initial_selections(self):
         result, _ = self.drive('check', [' ', '\n'], 'ssh\nignore-dns', [('ssh', 'SSH'), ('ignore-dns', 'Keep DNS')])
         self.assertEqual(result, ('next', 'ignore-dns'))
+
+    def test_select_all_and_clear_all_excludes_action_from_result(self):
+        options = [('__all__', 'Select all / clear all'), ('git', 'Git'), ('python3', 'Python')]
+        self.assertEqual(self.drive('check', [' ', '\n'], '', options)[0], ('next', 'git\npython3'))
+        self.assertEqual(self.drive('check', [' ', ' ', '\n'], '', options)[0], ('next', ''))
+
+    def test_orange_green_theme_and_readable_highlight(self):
+        screen = Screen(['\n'])
+        with patch.dict(os.environ, {'NO_COLOR': ''}), patch.object(curses, 'curs_set'), patch.object(curses, 'has_colors', return_value=True), \
+             patch.object(curses, 'start_color'), patch.object(curses, 'use_default_colors'), \
+             patch.object(curses, 'COLORS', 256, create=True), patch.object(curses, 'init_pair') as pairs, \
+             patch.object(curses, 'color_pair', return_value=0):
+            self.ui.run(screen, 'yesno', 'Test', 'Question', '1', [])
+        self.assertEqual([call.args for call in pairs.call_args_list], [(1, 208, -1), (2, 114, -1), (3, curses.COLOR_BLACK, 114)])
+
+    def test_no_default_for_optional_features(self):
+        self.assertEqual(self.drive('yesno', ['\n'], '0')[0], ('next', '0'))
 
 
 if __name__ == '__main__': unittest.main()
