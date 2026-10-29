@@ -88,6 +88,6 @@ Thank you for helping improve the SweenLab Proxmox Scripts project!
 
 # Release History
 
-Every user-visible tweak or update gets a new version, an entry in [CHANGELOG.md](CHANGELOG.md), and a [GitHub release](https://github.com/SweenLab/personal-proxmox-scripts/releases). This includes documentation-only updates. Changes for one user request can share a release.
+Every user-visible tweak or update gets a new version, an entry in [CHANGELOG.md](CHANGELOG.md), and a [GitHub release](https://github.com/SweenLab/sweenlab-scripts/releases). This includes documentation-only updates. Changes for one user request can share a release.
 
 Debian wizard releases use `debian-lxc-vX.Y.Z` tags to distinguish them from historical maintenance-tool releases. Keep the script version and documentation consistent. Release notes describe the changes, validation, known testing limitations, and the exact one-line launcher. See [AGENTS.md](AGENTS.md) for the publishing convention.

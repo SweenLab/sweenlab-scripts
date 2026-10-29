@@ -1,6 +1,15 @@
 # Changelog
 
-Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
+Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/sweenlab-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
+
+## Debian LXC Wizard 0.1.18 — 2026-10-28
+
+- Renamed the repository from personal-proxmox-scripts to sweenlab-scripts.
+- Added the approved SWEENLAB SCRIPTS banner and crisp 45-degree split crest under assets/branding; displayed the banner on the README.
+- Added an optional copyable Proxmox notes template with a commit-pinned banner URL. Existing container notes are not changed.
+- Updated repository links, README/guide version labels and immutable launch command. Wizard installation behavior is unchanged.
+
+Validation: Bash syntax and all 46 local tests pass. Public script and branding URLs are verified during publication. Live Proxmox provisioning has not been repeated for this branding/repository change.
 
 ## Debian LXC Wizard 0.1.17 — 2026-10-28
 

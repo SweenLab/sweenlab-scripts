@@ -1,4 +1,8 @@
-# SweenLab Personal Proxmox Scripts
+# SWEENLAB SCRIPTS
+
+<p align="center">
+  <img src="assets/branding/sweenlab-scripts-banner.png" alt="SWEENLAB SCRIPTS — orange and green circuit crest" width="800">
+</p>
 
 Hi, I'm Sween. 👋
 
@@ -28,6 +32,10 @@ Create a Debian 12 or 13 LXC through a fully guided, step-by-step wizard. Every 
 
 The installer is embedded in this single script and runs inside the new container.
 
+## Branding and container notes
+
+Download the [banner](assets/branding/sweenlab-scripts-banner.png) or [crest](assets/branding/sweenlab-crest.png), and use the [copyable Proxmox notes template](docs/container-notes.md).
+
 ## Features
 
 - Consistent orange/green screens, persistent centered grey input boxes, complete Tab/arrow navigation, and an aligned Create/Abort review. Password confirmation always starts blank.
@@ -49,16 +57,16 @@ The installer is embedded in this single script and runs inside the new containe
 Use the copy button on the command block below, then paste it into your **Proxmox node shell as root**:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/personal-proxmox-scripts/555026602b5470bb121365e575f832994f76b5c7/scripts/proxmox-debian-lxc-create.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/4f0038a7560099e0ccf3aaaa04338bb2c51cfa2d/scripts/proxmox-debian-lxc-create.sh)"
 ```
 
-This command is pinned to version 0.1.17 so it does not depend on a cached main-branch download. This downloads and runs the SweenLab wizard. Back preserves your entries; the final Create action begins provisioning. The guest installer is embedded; no companion file or additional shell script download is required.
+This command is pinned to version 0.1.18 so it does not depend on a cached main-branch download. This downloads and runs the SweenLab wizard. Back preserves your entries; the final Create action begins provisioning. The guest installer is embedded; no companion file or additional shell script download is required.
 
 For a first test, choose a new disposable container ID. Follow the [step-by-step guide](docs/proxmox-debian-lxc-create.md) for prerequisites, passthrough permissions, retries and testing. You can inspect the script on GitHub before running it.
 
 ## Testing Status
 
-Version 0.1.17 is an initial test build. Bash syntax and simulated workflow checks pass; live Proxmox, Docker, Tailscale and GPU validation is still required. Start with a disposable container.
+Version 0.1.18 is an initial test build. Bash syntax and simulated workflow checks pass; live Proxmox, Docker, Tailscale and GPU validation is still required. Start with a disposable container.
 
 ## Documentation
 
@@ -66,7 +74,7 @@ Version 0.1.17 is an initial test build. Bash syntax and simulated workflow chec
 
 ## Releases
 
-Every tweak and update is recorded in the [changelog](CHANGELOG.md) and on the [Releases page](https://github.com/SweenLab/personal-proxmox-scripts/releases). Historical releases can contain tools no longer present on the main branch.
+Every tweak and update is recorded in the [changelog](CHANGELOG.md) and on the [Releases page](https://github.com/SweenLab/sweenlab-scripts/releases). Historical releases can contain tools no longer present on the main branch.
 
 ## Contributing
 
