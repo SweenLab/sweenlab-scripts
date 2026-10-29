@@ -2,6 +2,13 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/sweenlab-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Hawser Agent Setup 0.1.1 — 2026-10-28
+
+- Highlight Yes by default on the verbose output selector. No remains available; explicit selection and Back navigation are unchanged.
+- Update version labels and the immutable README/guide launcher.
+
+Validation: Bash syntax, diff checks and all 10 Hawser tests pass. Live LXC installation has not been repeated.
+
 ## Hawser Agent Setup 0.1.0 — 2026-10-28
 
 - Add a self-contained orange/green setup wizard for the native Hawser service inside Docker LXCs. Paste a Dockhand-generated token or generate one with F2; no Compose file is required.

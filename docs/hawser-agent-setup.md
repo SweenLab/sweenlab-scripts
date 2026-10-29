@@ -1,4 +1,4 @@
-# Hawser Agent Setup Wizard 0.1.0
+# Hawser Agent Setup Wizard 0.1.1
 
 Install Hawser directly as a systemd service inside each Linux LXC that runs Docker. No Compose file is needed. One agent manages the Docker daemon in that LXC, including all its Docker containers. The agent does not manage Proxmox itself.
 
@@ -7,17 +7,17 @@ Install Hawser directly as a systemd service inside each Linux LXC that runs Doc
 Run as root **inside the Docker LXC**, not on your Proxmox node:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/8bfd8b389a76f2a426ae8fa5bcfc31543a6f8d7b/scripts/hawser-agent-setup.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/270bfca5cbcdfd9ea6ace7200add40a717bbbbd1/scripts/hawser-agent-setup.sh)"
 ```
 
-This immutable launcher runs version 0.1.0. Requires working Docker, systemd, internet access to GitHub, and an interactive terminal at least 74 columns × 22 rows. On Debian/Ubuntu, missing Python 3 is installed automatically before the menus; aborting afterward does not remove that prerequisite. Other systems must already provide Python 3 with curses and trusted HTTPS certificates.
+This immutable launcher runs version 0.1.1. Requires working Docker, systemd, internet access to GitHub, and an interactive terminal at least 74 columns × 22 rows. On Debian/Ubuntu, missing Python 3 is installed automatically before the menus; aborting afterward does not remove that prerequisite. Other systems must already provide Python 3 with curses and trusted HTTPS certificates.
 
 ## Token and menus
 
 1. Name the LXC/agent, for example `homarr` or `entertainment`.
 2. Paste the token generated in Dockhand's Add Environment window. **The exact same token must be used on both sides.** If your Dockhand version has no Generate button, press **F2 in the wizard's token field** to generate one locally; copy it into Dockhand after installation. Tokens are hidden while you type, never sent to a third party, and excluded from installer logs.
 3. Choose the directory for new agent-managed stacks; `/data/stacks` is the default. This does not import or move existing application directories.
-4. Choose verbose output (default No).
+4. Choose verbose output (default Yes).
 5. Review the configuration and choose **Install**. Back edits earlier entries; Abort exits. Tab/Shift+Tab reaches the field and every button, arrows navigate, and Space/Enter explicitly selects Yes/No before focusing Next. Ctrl+U clears an input field; Backspace deletes its last character.
 
 The orange/green menus have centered prompts, visible input fields and mandatory-field validation. The agent name and directory cannot contain spaces. Installation displays progress and a final success checklist.

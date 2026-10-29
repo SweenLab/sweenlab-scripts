@@ -29,10 +29,10 @@ Connect Docker LXCs to Dockhand with a guided native-service installer—no Comp
 Run **inside each Docker LXC as root**:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/8bfd8b389a76f2a426ae8fa5bcfc31543a6f8d7b/scripts/hawser-agent-setup.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/270bfca5cbcdfd9ea6ace7200add40a717bbbbd1/scripts/hawser-agent-setup.sh)"
 ```
 
-Version **0.1.0**. Uses Standard HTTP/token authentication on port 2376 for a trusted LAN/Tailscale path. Installs and enables Hawser at boot; existing Compose stacks require separate import. [Setup guide](docs/hawser-agent-setup.md) · [Script](scripts/hawser-agent-setup.sh). Local checks pass; live LXC installation remains unverified.
+Version **0.1.1**. Uses Standard HTTP/token authentication on port 2376 for a trusted LAN/Tailscale path. Installs and enables Hawser at boot; existing Compose stacks require separate import. [Setup guide](docs/hawser-agent-setup.md) · [Script](scripts/hawser-agent-setup.sh). Local checks pass; live LXC installation remains unverified.
 
 ---
 
