@@ -161,6 +161,7 @@ AUTOMATIC SETTINGS
   Verbose output  $(yes_word "$verbose")
   Full package upgrade enabled; firewall interface flag enabled
   CPU limit 0; CPU weight 100; swap 512 MiB
+  Summary notes: centered SWEENLAB SCRIPTS banner and links
   PVE default startup order/delays; deletion protection off
   Passed devices use guest UID/GID 0 and mode 0660
 
