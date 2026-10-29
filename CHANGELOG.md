@@ -2,6 +2,15 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/sweenlab-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.20 — 2026-10-28
+
+- Automatically add generic branded Summary notes to new LXCs through pct create --description: compact banner plus GitHub, Guide and Releases links, with no app-specific text.
+- Center the block horizontally and vertically in a 280-pixel-high layout using supported table attributes. It does not dynamically follow arbitrary panel heights; no Proxmox UI/CSS files are changed.
+- Retain wizard version in a hidden comment and show the automatic notes setting in the creation review. Existing guests are not modified.
+- Replace previous app-specific notes examples with the shared generic template; update README, guide and immutable launcher.
+
+Validation: host Bash syntax and 47 local tests pass, including complete multiline notes passed as one creation argument, generic content, and unchanged existing guests. HTML attributes were checked against Proxmox's sanitizer allowlist. Live provisioning/rendering of this release remains unverified.
+
 ## Debian LXC Wizard 0.1.19 — 2026-10-28
 
 - Added a dedicated 280 × 112 banner for narrow Proxmox Summary Notes panels, avoiding reliance on image width attributes.

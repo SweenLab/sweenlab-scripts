@@ -1,16 +1,16 @@
 # SweenLab Debian LXC Creation Wizard
 
-Version 0.1.19 (initial test build). One self-contained script, fully step by step, with Back navigation and a final Create/Abort review. Live Proxmox testing is still required.
+Version 0.1.20 (initial test build). One self-contained script, fully step by step, with Back navigation and a final Create/Abort review. Live Proxmox testing is still required.
 
 ## Quick Start: copy and paste
 
 Use the copy button in the top-right corner of this block, then paste into your **Proxmox node shell as root**:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/431677614bb80d7795f9e37ac7791b4a56f7900b/scripts/proxmox-debian-lxc-create.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/553dbf9c5b1b154aaa228e4d62df96ba683cfef0/scripts/proxmox-debian-lxc-create.sh)"
 ```
 
-The command is pinned to the verified version 0.1.19 script to avoid stale raw GitHub main-branch downloads. No clone, companion file, or additional shell-script download is needed.
+The command is pinned to the verified version 0.1.20 script to avoid stale raw GitHub main-branch downloads. No clone, companion file, or additional shell-script download is needed.
 
 If an older wizard is still open, abort it and restart with this command. Use a new disposable CT ID for the first test. Do not reuse an ID left by a failed creation until its state has been inspected.
 
@@ -112,7 +112,7 @@ tar: /var/lib/lxc/204/rootfs: Cannot open: Permission denied
 
 occurs inside Proxmox's template extraction, before guest setup. The wizard through version 0.1.4 passed its private-file `umask 077` to Proxmox. Proxmox's directory creation respects that mask, producing `0700` CT directories that mapped container root (host UID 100000) cannot traverse. This matches the reported root-owned `0700` directories.
 
-Version 0.1.19 runs Proxmox container commands in a subshell with `umask 022`, while logs and UI files retain their private mask. A regression test reproduces the old `0700` behavior with Perl's `File::Path::make_path` and verifies the corrected `0755` directories, private `0600` log files, and command status preservation. This has not yet been validated by creating a container on a live Proxmox host.
+Version 0.1.20 runs Proxmox container commands in a subshell with `umask 022`, while logs and UI files retain their private mask. A regression test reproduces the old `0700` behavior with Perl's `File::Path::make_path` and verifies the corrected `0755` directories, private `0600` log files, and command status preservation. This has not yet been validated by creating a container on a live Proxmox host.
 
 Choose a fresh unused CT ID for the next test. The wizard validates the ID format and checks that no VM or CT uses it through Proxmox. Leftover directories alone do not block selection or trigger a separate pre-creation rejection; Proxmox handles creation errors. Existing failed directories and disks are left untouched for separate inspection. The read-only mapped-root traversal preflight remains in place.
 
@@ -134,6 +134,10 @@ Some paths or the CT configuration may no longer exist after Proxmox's own clean
 The guest installer is launched under the built-in `C.UTF-8` locale to avoid an inherited not-yet-generated locale warning before setup. The installer refreshes APT and installs locale support, generates the selected locale if needed, resets stale locale overrides, and writes both `/etc/locale.conf` and `/etc/default/locale` for Debian 12/13 compatibility. It activates and verifies UTF-8 in the installer environment. It then refreshes APT again and runs `apt-get -y dist-upgrade` (with the existing keep-config policy), the script-oriented equivalent of `apt full-upgrade -y`. A failed locale check stops setup instead of reporting success. New login sessions use the saved system default; an already-open shell can retain its previous environment.
 
 References: [Debian 13 update-locale](https://manpages.debian.org/trixie/locales/update-locale.8.en.html), [Debian APT command equivalents](https://www.debian.org/doc/manuals/debian-faq/pkgtools.html).
+
+## Automatic Summary notes
+
+New containers receive the [generic branded notes block](container-notes.md) through the description argument during creation. It contains only the banner and GitHub/Guide/Releases links, centered horizontally and vertically within a 280-pixel-high layout area. The creation review lists this automatic setting. Existing containers and custom notes are not updated. The wizard version is retained in a hidden HTML comment.
 
 ## Logs, safety, and retry behavior
 

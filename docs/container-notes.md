@@ -1,27 +1,22 @@
-# Compact Proxmox container notes
+# Automatic centered Proxmox notes
 
-Select a container, open Summary, click Edit notes, and replace the old note with the appropriate block below. The Notes banner is physically 280 × 112 pixels, avoiding clipping from a large source image if size attributes are ignored. Keep the heading and description specific to the selected container. No custom CSS or image sizing is required.
-
-## Generic Debian container
+The Debian LXC wizard automatically adds this generic block when creating a new container. It contains only the compact banner and repository links. Existing containers are left unchanged; to update one manually, open Summary → Edit notes and replace its note with the block below.
 
 ```html
-<div align="center">
-<img src="https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/431677614bb80d7795f9e37ac7791b4a56f7900b/assets/branding/sweenlab-scripts-notes.png" alt="SWEENLAB SCRIPTS">
-<h3>Debian LXC</h3>
-<p>Created with SWEENLAB SCRIPTS</p>
-<p><a href="https://github.com/SweenLab/sweenlab-scripts">GitHub</a> · <a href="https://github.com/SweenLab/sweenlab-scripts/blob/main/docs/proxmox-debian-lxc-create.md">Guide</a> · <a href="https://github.com/SweenLab/sweenlab-scripts/releases">Releases</a></p>
-</div>
+<!-- Created by Sweenlab wizard 0.1.20 -->
+<table width="100%" height="280">
+<thead><tr><td align="center" valign="middle">
+<img src="https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/431677614bb80d7795f9e37ac7791b4a56f7900b/assets/branding/sweenlab-scripts-notes.png" alt="SWEENLAB SCRIPTS" width="280" height="112">
+<br><br>
+<a href="https://github.com/SweenLab/sweenlab-scripts">GitHub</a> · <a href="https://github.com/SweenLab/sweenlab-scripts/blob/main/docs/proxmox-debian-lxc-create.md">Guide</a> · <a href="https://github.com/SweenLab/sweenlab-scripts/releases">Releases</a>
+</td></tr></thead>
+</table>
 ```
 
-## Dockhand
+The table uses a 280-pixel-high layout area with horizontal and vertical middle alignment. The image is physically 280 × 112 pixels. This gives a centered block suited to the standard Summary panel without application names or container-specific details. The wizard version is retained in a hidden comment.
 
-```html
-<div align="center">
-<img src="https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/431677614bb80d7795f9e37ac7791b4a56f7900b/assets/branding/sweenlab-scripts-notes.png" alt="SWEENLAB SCRIPTS">
-<h3>Dockhand</h3>
-<p>Debian LXC · Docker management</p>
-<p><a href="https://github.com/SweenLab/sweenlab-scripts">GitHub</a> · <a href="https://github.com/SweenLab/sweenlab-scripts/blob/main/docs/proxmox-debian-lxc-create.md">Guide</a> · <a href="https://github.com/SweenLab/sweenlab-scripts/releases">Releases</a></p>
-</div>
-```
+This is fixed-height centering, not responsive centering against every possible Notes panel height. Proxmox sanitizes custom inline styles, so the note uses supported height/width/align/valign attributes rather than CSS or JavaScript. You can adjust the table height manually for a differently sized panel. No Proxmox UI files are changed.
 
-The full-size banner and crest remain available under [assets/branding](../assets/branding/). These templates are pasted manually; the wizard does not overwrite existing container notes. The compact asset size and HTML structure have been checked locally; rendering in the live Proxmox Notes panel still needs confirmation.
+References: [Notes HTML allowlist](https://github.com/proxmox/proxmox-widget-toolkit/blob/master/src/Parser.js), [Summary panel layout](https://github.com/proxmox/pve-manager/blob/master/www/manager6/panel/GuestSummary.js).
+
+The [full banner and crest](../assets/branding/) remain available. Local workflow tests confirm the complete multiline block is passed as one description argument; live panel rendering still needs confirmation.
