@@ -2,6 +2,17 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/sweenlab-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Hawser Agent Setup 0.1.0 — 2026-10-28
+
+- Add a self-contained orange/green setup wizard for the native Hawser service inside Docker LXCs. Paste a Dockhand-generated token or generate one with F2; no Compose file is required.
+- Add validated agent name/token/stack-directory inputs, horizontal explicit Yes/No for verbose output, Back/Next/Abort and an Install review.
+- Download the latest official agent, verify its release checksum, configure private token authentication, enable/start systemd and verify health plus boot startup.
+- Back up existing files, restore them and attempt to restore service state on installation failure; preserve unrelated config, exclude tokens from logs and reject conflicting Edge/TLS/custom-bind or Docker-agent deployments.
+- Show a final checklist and Dockhand connection values. Existing application containers are not restarted; existing Compose stacks require separate import.
+- Add an immutable launcher and dedicated setup guide. The Debian LXC wizard stays at 0.1.20.
+
+Validation: Bash syntax, diff checks and all 57 local tests pass, including 10 new agent tests covering input validation, required selection/navigation, checksum mismatch, private writes, simulated install/token redaction and rollback. Official release asset names were verified. Live Linux/systemd/LXC setup remains unverified.
+
 ## Debian LXC Wizard 0.1.20 — 2026-10-28
 
 - Automatically add generic branded Summary notes to new LXCs through pct create --description: compact banner plus GitHub, Guide and Releases links, with no app-specific text.

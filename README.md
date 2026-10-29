@@ -22,6 +22,20 @@ Have fun!
 
 ---
 
+# Hawser Agent Setup Wizard
+
+Connect Docker LXCs to Dockhand with a guided native-service installer—no Compose file needed. Paste a Dockhand-generated token, or press **F2** to generate one in the wizard. Includes orange/green menus, Back/Abort, quiet/verbose installation, checksum verification, backups and a final checklist.
+
+Run **inside each Docker LXC as root**:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/8bfd8b389a76f2a426ae8fa5bcfc31543a6f8d7b/scripts/hawser-agent-setup.sh)"
+```
+
+Version **0.1.0**. Uses Standard HTTP/token authentication on port 2376 for a trusted LAN/Tailscale path. Installs and enables Hawser at boot; existing Compose stacks require separate import. [Setup guide](docs/hawser-agent-setup.md) · [Script](scripts/hawser-agent-setup.sh). Local checks pass; live LXC installation remains unverified.
+
+---
+
 # Debian LXC Creation Wizard
 
 Create a Debian 12 or 13 LXC through a fully guided, step-by-step wizard. Every configuration stage is shown; no packages are preselected.
