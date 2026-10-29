@@ -2,7 +2,7 @@
 # SweenLab Debian LXC Creation Wizard — MIT
 # https://github.com/SweenLab/sweenlab-scripts
 set -Eeuo pipefail
-SCRIPT_VERSION=0.1.19
+SCRIPT_VERSION=0.1.20
 COMPLETED=()
 CTID='' CREATED=0 LOG='' TMP='' UI_DIR='' UI_ACTION='' UI_VALUE=''
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
@@ -112,6 +112,18 @@ creation_diagnostics() {
     command -v findmnt >/dev/null && findmnt -T /var/lib/lxc -o TARGET,SOURCE,FSTYPE,OPTIONS || true
     printf 'Inspect the selected storage (%s), parent traversal permissions and ACLs.\n' "$root_store"
     printf 'Do not chmod recursively or switch to privileged mode as an automatic workaround.\n'
+}
+container_notes() {
+    cat <<NOTES
+<!-- Created by Sweenlab wizard $SCRIPT_VERSION -->
+<table width="100%" height="280">
+<thead><tr><td align="center" valign="middle">
+<img src="https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/431677614bb80d7795f9e37ac7791b4a56f7900b/assets/branding/sweenlab-scripts-notes.png" alt="SWEENLAB SCRIPTS" width="280" height="112">
+<br><br>
+<a href="https://github.com/SweenLab/sweenlab-scripts">GitHub</a> · <a href="https://github.com/SweenLab/sweenlab-scripts/blob/main/docs/proxmox-debian-lxc-create.md">Guide</a> · <a href="https://github.com/SweenLab/sweenlab-scripts/releases">Releases</a>
+</td></tr></thead>
+</table>
+NOTES
 }
 make_plan() {
     cat <<PLAN
@@ -359,7 +371,7 @@ execute_plan() {
     local -a args=("$CTID" "$template" --ostype debian --arch "$(dpkg --print-architecture)" --hostname "$hostname"
         --cores "$cores" --cpulimit 0 --cpuunits 100 --memory "$memory" --swap 512 --rootfs "$root_store:$disk"
         --unprivileged "$unpriv" --features "$features" --net0 "$net" --onboot "$onboot" --protection 0
-        --description "SweenLab Debian LXC; wizard $SCRIPT_VERSION")
+        --description "$(container_notes)")
     [[ -z "$tags" ]] || args+=(--tags "$tags")
     [[ -z "$dns" ]] || args+=(--nameserver "$dns")
     [[ -z "$search" ]] || args+=(--searchdomain "$search")

@@ -52,6 +52,13 @@ pct() {
     printf 'pct' >> "$FIXTURE/calls"
     printf ' <%s>' "$@" >> "$FIXTURE/calls"
     printf '\\n' >> "$FIXTURE/calls"
+    if [[ "$1" == create ]]; then
+        local previous='' argument
+        for argument in "$@"; do
+            [[ "$previous" != --description ]] || printf '%s' "$argument" > "$FIXTURE/notes"
+            previous=$argument
+        done
+    fi
     if [[ "$1" == help ]]; then echo '--dev[n]'; fi
     if [[ "$1" == create && "$SCENARIO" == create-fail ]]; then echo 'tar: rootfs: Cannot open: Permission denied' >&2; return 255; fi
     if [[ "$1" == exec && "$*" == *chpasswd* ]]; then
@@ -214,6 +221,20 @@ configure
             with self.subTest(address=address):
                 result = subprocess.run(['bash', '-c', 'source "$1"; validate_ip 4 "$2"', 'test', str(SCRIPT), address], capture_output=True, text=True)
                 self.assertEqual(result.returncode == 0, valid, result.stderr)
+
+    def test_creation_sets_generic_centered_notes_as_one_argument(self):
+        result, files = self.exercise(execute=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        notes = files['notes']
+        self.assertIn('<table width="100%" height="280">', notes)
+        self.assertIn('align="center" valign="middle"', notes)
+        self.assertIn('sweenlab-scripts-notes.png', notes)
+        for label in ('>GitHub</a>', '>Guide</a>', '>Releases</a>'):
+            self.assertIn(label, notes)
+        for private in ('fixture-secret', 'test-debian', 'Dockhand', 'Apprise', '10.10.10.204'):
+            self.assertNotIn(private, notes)
+        self.assertLess(len(notes.encode()), 8192)
+        self.assertNotIn('pct <set>', files['calls'])
 
     def test_namespace_failure_happens_before_pct_create(self):
         result, files = self.exercise('namespace-fail', execute=True)
