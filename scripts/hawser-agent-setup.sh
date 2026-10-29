@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# SWEENLAB SCRIPTS — Hawser Agent Setup 0.1.0
+# SWEENLAB SCRIPTS — Hawser Agent Setup 0.1.1
 # Run inside the Docker LXC, not on the Proxmox host.
 set -euo pipefail
-if [[ ${1:-} == --version ]]; then echo 'Sweenlab Hawser Agent Setup 0.1.0'; exit 0; fi
+if [[ ${1:-} == --version ]]; then echo 'Sweenlab Hawser Agent Setup 0.1.1'; exit 0; fi
 [[ $EUID == 0 ]] || { echo 'Run this wizard as root inside the Docker LXC.'; exit 1; }
 [[ -t 1 && -r /dev/tty ]] || { echo 'An interactive terminal is required.'; exit 1; }
 [[ $(uname -s) == Linux && -d /run/systemd/system && ! -d /etc/pve ]] || { echo 'Run inside a Linux Docker LXC with systemd, not the Proxmox node.'; exit 1; }
@@ -15,7 +15,7 @@ fi
 exec python3 - <<'PY'
 import curses, hashlib, io, json, os, pathlib, platform, re, secrets, shutil
 import socket, subprocess, sys, tarfile, tempfile, textwrap, time, urllib.request
-VERSION = '0.1.0'
+VERSION = '0.1.1'
 CONFIG = pathlib.Path('/etc/hawser/config')
 UNIT = pathlib.Path('/etc/systemd/system/hawser.service')
 BINARY = pathlib.Path('/usr/local/bin/hawser')
@@ -233,7 +233,7 @@ class Wizard:
 def collect(screen, existing):
     ui = Wizard(screen)
     state = {'name': existing.get('AGENT_NAME', socket.gethostname().split('.')[0]),
-             'token': '', 'stacks': existing.get('STACKS_DIR', '/data/stacks'), 'verbose': 'No'}
+             'token': '', 'stacks': existing.get('STACKS_DIR', '/data/stacks'), 'verbose': 'Yes'}
     steps = ['name', 'token', 'stacks', 'verbose', 'review']
     step = 0
     warning = ''
