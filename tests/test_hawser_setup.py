@@ -153,6 +153,30 @@ class NavigationTests(unittest.TestCase):
         with self.assertRaises(h.Abort):
             self.page(['\x1b'])
 
+    def test_final_buttons_order_default_create_abort_and_back(self):
+        result, text = self.page(['\n'], value='ready', kind='review', final=True)
+        labels = [x for x in text if x in ('< Create >', '< Abort >', '< Back >')]
+        self.assertEqual(labels[:3], ['< Create >', '< Abort >', '< Back >'])
+        self.assertEqual(result[0], 'next')
+        with self.assertRaises(h.Abort):
+            self.page(['\t', '\n'], value='ready', kind='review', final=True)
+        result, _ = self.page(['\t', '\t', '\n'], value='ready', kind='review', final=True)
+        self.assertEqual(result[0], 'back')
+        result, _ = self.page([h.curses.KEY_LEFT, '\n'], value='ready', kind='review', final=True)
+        self.assertEqual(result[0], 'back')
+
+    def test_collect_skips_verbose_prompt(self):
+        prompts = []
+        values = iter(['homarr', 'a'*64, '/data/stacks', 'ready'])
+        def page(*args, **kwargs):
+            prompts.append(args[0])
+            return 'next', next(values)
+        with patch.object(h, 'Wizard') as wizard:
+            wizard.return_value.page.side_effect = page
+            result = h.collect(None, {})
+        self.assertEqual(prompts, ['Agent name (required)', 'Agent token (required)', 'New stack directory (required)', 'Review and create'])
+        self.assertNotIn('verbose', result)
+
 
 if __name__ == '__main__':
     unittest.main()

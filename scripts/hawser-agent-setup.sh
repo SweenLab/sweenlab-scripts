@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# SWEENLAB SCRIPTS — Hawser Agent Setup 0.1.1
+# SWEENLAB SCRIPTS — Hawser Agent Setup 0.1.2
 # Run inside the Docker LXC, not on the Proxmox host.
 set -euo pipefail
-if [[ ${1:-} == --version ]]; then echo 'Sweenlab Hawser Agent Setup 0.1.1'; exit 0; fi
+if [[ ${1:-} == --version ]]; then echo 'Sweenlab Hawser Agent Setup 0.1.2'; exit 0; fi
 [[ $EUID == 0 ]] || { echo 'Run this wizard as root inside the Docker LXC.'; exit 1; }
 [[ -t 1 && -r /dev/tty ]] || { echo 'An interactive terminal is required.'; exit 1; }
 [[ $(uname -s) == Linux && -d /run/systemd/system && ! -d /etc/pve ]] || { echo 'Run inside a Linux Docker LXC with systemd, not the Proxmox node.'; exit 1; }
@@ -15,7 +15,7 @@ fi
 exec python3 - <<'PY'
 import curses, hashlib, io, json, os, pathlib, platform, re, secrets, shutil
 import socket, subprocess, sys, tarfile, tempfile, textwrap, time, urllib.request
-VERSION = '0.1.1'
+VERSION = '0.1.2'
 CONFIG = pathlib.Path('/etc/hawser/config')
 UNIT = pathlib.Path('/etc/systemd/system/hawser.service')
 BINARY = pathlib.Path('/usr/local/bin/hawser')
@@ -121,7 +121,7 @@ class Wizard:
             self.s.addstr(y, max(2, (w - len(text)) // 2), text, attr)
 
     def page(self, title, prompt, value='', kind='input', choices=None, required=True, secret=False, final=False):
-        focus, cursor, selected, error = (2 if final else 0), len(value), None, ''
+        focus, cursor, selected, error = (1 if final else 0), len(value), None, ''
         if choices and value in choices:
             cursor = choices.index(value)
         elif choices:
@@ -168,7 +168,7 @@ class Wizard:
                 curses.curs_set(0)
             if error:
                 self.put(h - 7, error, curses.color_pair(1) | curses.A_BOLD)
-            buttons = ['Back', 'Install' if final else 'Next', 'Abort']
+            buttons = ['Create', 'Abort', 'Back'] if final else ['Back', 'Next', 'Abort']
             labels = ['< ' + b + ' >' for b in buttons]
             start = (w - sum(map(len, labels)) - 8) // 2
             for n, label in enumerate(labels):
@@ -182,9 +182,11 @@ class Wizard:
             if key == '\x1b':
                 raise Abort()
             if key == '\t':
-                focus = (focus + 1) % 4
+                focus = 1 + (focus % 3) if final else (focus + 1) % 4
             elif key == curses.KEY_BTAB:
-                focus = (focus - 1) % 4
+                focus = 1 + ((focus - 2) % 3) if final else (focus - 1) % 4
+            elif final and key in (curses.KEY_UP, curses.KEY_DOWN):
+                focus = 1 + ((focus - 1 + (1 if key == curses.KEY_DOWN else -1)) % 3)
             elif key == curses.KEY_UP:
                 if focus:
                     focus = 0
@@ -204,10 +206,13 @@ class Wizard:
                 error = 'Token generated. It will be shown privately after installation.'
                 focus = 2
             elif key in ('\n', '\r', curses.KEY_ENTER) or (key == ' ' and choices and focus == 0):
-                if focus == 3:
+                action = buttons[focus - 1] if focus else None
+                if action == 'Abort':
                     raise Abort()
-                if focus == 1:
+                if action == 'Back':
                     return 'back', value
+                if action == 'Create':
+                    return 'next', value
                 if choices and focus == 0:
                     selected = choices[cursor]
                     value = selected
@@ -233,8 +238,8 @@ class Wizard:
 def collect(screen, existing):
     ui = Wizard(screen)
     state = {'name': existing.get('AGENT_NAME', socket.gethostname().split('.')[0]),
-             'token': '', 'stacks': existing.get('STACKS_DIR', '/data/stacks'), 'verbose': 'Yes'}
-    steps = ['name', 'token', 'stacks', 'verbose', 'review']
+             'token': '', 'stacks': existing.get('STACKS_DIR', '/data/stacks')}
+    steps = ['name', 'token', 'stacks', 'review']
     step = 0
     warning = ''
     while True:
@@ -245,23 +250,20 @@ def collect(screen, existing):
             args = ('Agent token (required)', 'Paste the token generated in Dockhand.\nOr press F2 to generate one here.' + warning, state[key])
         elif key == 'stacks':
             args = ('New stack directory (required)', 'Folder for new stacks managed through the agent.\nExisting application files are not moved.' + warning, state[key])
-        elif key == 'verbose':
-            args = ('Installation output', 'Show detailed installation output?', state[key])
         else:
             prompt = '\n'.join(['Agent: ' + state['name'], 'Mode: Standard | Protocol: HTTP | Port: 2376',
                                 'Token: configured (hidden)', 'New stacks: ' + state['stacks'],
-                                'Verbose: ' + state['verbose'], 'Install native service and enable startup on boot.',
+                                'Installation output: Verbose (automatic)', 'Install native service and enable startup on boot.',
                                 'Existing Hawser config/service will be backed up and replaced.' if CONFIG.exists() or UNIT.exists()
                                 else 'Ready to install Hawser on this Docker LXC.'])
-            args = ('Review and install', prompt, 'ready')
-        action, value = ui.page(*args, secret=key == 'token', kind='choice' if key == 'verbose' else ('review' if key == 'review' else 'input'),
-                                choices=['Yes', 'No'] if key == 'verbose' else None, final=key == 'review')
+            args = ('Review and create', prompt, 'ready')
+        action, value = ui.page(*args, secret=key == 'token', kind='review' if key == 'review' else 'input', final=key == 'review')
         warning = ''
         if action == 'back':
             step = max(0, step - 1)
             continue
         if key != 'review':
-            valid = {'name': validate_name, 'token': validate_token, 'stacks': validate_path, 'verbose': lambda _: True}[key](value)
+            valid = {'name': validate_name, 'token': validate_token, 'stacks': validate_path}[key](value)
             state[key] = value
             if not valid:
                 warning = '\n' + {'name': 'Use letters, numbers, dots, underscores or hyphens.',
@@ -305,8 +307,7 @@ def install(state, old_content):
         output = result.stdout.replace(state['token'], '[REDACTED]')
         with logpath.open('a') as log:
             log.write(output)
-        if state['verbose'] == 'Yes':
-            print(output, end='', flush=True)
+        print(output, end='', flush=True)
         if result.returncode:
             raise RuntimeError('Command failed: ' + args[0] + '. See ' + str(logpath))
         return result.stdout
