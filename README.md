@@ -57,16 +57,16 @@ Download the [banner](assets/branding/sweenlab-scripts-banner.png) or [crest](as
 Use the copy button on the command block below, then paste it into your **Proxmox node shell as root**:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/4f0038a7560099e0ccf3aaaa04338bb2c51cfa2d/scripts/proxmox-debian-lxc-create.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/431677614bb80d7795f9e37ac7791b4a56f7900b/scripts/proxmox-debian-lxc-create.sh)"
 ```
 
-This command is pinned to version 0.1.18 so it does not depend on a cached main-branch download. This downloads and runs the SweenLab wizard. Back preserves your entries; the final Create action begins provisioning. The guest installer is embedded; no companion file or additional shell script download is required.
+This command is pinned to version 0.1.19 so it does not depend on a cached main-branch download. This downloads and runs the SweenLab wizard. Back preserves your entries; the final Create action begins provisioning. The guest installer is embedded; no companion file or additional shell script download is required.
 
 For a first test, choose a new disposable container ID. Follow the [step-by-step guide](docs/proxmox-debian-lxc-create.md) for prerequisites, passthrough permissions, retries and testing. You can inspect the script on GitHub before running it.
 
 ## Testing Status
 
-Version 0.1.18 is an initial test build. Bash syntax and simulated workflow checks pass; live Proxmox, Docker, Tailscale and GPU validation is still required. Start with a disposable container.
+Version 0.1.19 is an initial test build. Bash syntax and simulated workflow checks pass; live Proxmox, Docker, Tailscale and GPU validation is still required. Start with a disposable container.
 
 ## Documentation
 

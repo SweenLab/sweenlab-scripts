@@ -2,6 +2,14 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/sweenlab-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Debian LXC Wizard 0.1.19 — 2026-10-28
+
+- Added a dedicated 280 × 112 banner for narrow Proxmox Summary Notes panels, avoiding reliance on image width attributes.
+- Replaced the notes guide with short generic and Dockhand templates: compact banner, heading, one description and one link row. Removed unnecessary detail blocks from the suggested layout.
+- Updated README/guide version labels and immutable launcher. Provisioning behavior is unchanged.
+
+Validation: banner dimensions confirmed, host Bash syntax and diff checks pass. Live Notes-panel rendering has not been confirmed; the user must replace the existing note manually. No existing guest was modified.
+
 ## Debian LXC Wizard 0.1.18 — 2026-10-28
 
 - Renamed the repository from personal-proxmox-scripts to sweenlab-scripts.
