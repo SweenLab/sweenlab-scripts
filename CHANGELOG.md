@@ -2,6 +2,14 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/sweenlab-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## Hawser Agent Setup 0.1.2 — 2026-10-28
+
+- Remove the verbose-output question and always stream installation output, with tokens still redacted.
+- Change the review actions to Create, Abort, Back in that order; highlight Create by default. Tab/Shift+Tab and arrow keys cycle through these three actions.
+- Keep Back editing and the final completion checklist; update README and guide with the new immutable launcher.
+
+Validation: Bash syntax, diff checks and all 12 Hawser tests pass, including final action order, default Create, Abort/Back navigation and removal of the verbose prompt. Live LXC installation has not been repeated.
+
 ## Hawser Agent Setup 0.1.1 — 2026-10-28
 
 - Highlight Yes by default on the verbose output selector. No remains available; explicit selection and Back navigation are unchanged.

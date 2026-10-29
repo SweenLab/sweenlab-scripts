@@ -24,15 +24,15 @@ Have fun!
 
 # Hawser Agent Setup Wizard
 
-Connect Docker LXCs to Dockhand with a guided native-service installer—no Compose file needed. Paste a Dockhand-generated token, or press **F2** to generate one in the wizard. Includes orange/green menus, Back/Abort, quiet/verbose installation, checksum verification, backups and a final checklist.
+Connect Docker LXCs to Dockhand with a guided native-service installer—no Compose file needed. Paste a Dockhand-generated token, or press **F2** to generate one in the wizard. Includes orange/green menus, Back/Abort, automatic verbose installation, checksum verification, backups and a final checklist.
 
 Run **inside each Docker LXC as root**:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/270bfca5cbcdfd9ea6ace7200add40a717bbbbd1/scripts/hawser-agent-setup.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/8d70357b43e1d91eb5a86798f9bc9ed784e424f4/scripts/hawser-agent-setup.sh)"
 ```
 
-Version **0.1.1**. Uses Standard HTTP/token authentication on port 2376 for a trusted LAN/Tailscale path. Installs and enables Hawser at boot; existing Compose stacks require separate import. [Setup guide](docs/hawser-agent-setup.md) · [Script](scripts/hawser-agent-setup.sh). Local checks pass; live LXC installation remains unverified.
+Version **0.1.2**. Uses Standard HTTP/token authentication on port 2376 for a trusted LAN/Tailscale path. Installs and enables Hawser at boot; existing Compose stacks require separate import. [Setup guide](docs/hawser-agent-setup.md) · [Script](scripts/hawser-agent-setup.sh). Local checks pass; live LXC installation remains unverified.
 
 ---
 

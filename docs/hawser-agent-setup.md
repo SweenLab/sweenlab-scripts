@@ -1,4 +1,4 @@
-# Hawser Agent Setup Wizard 0.1.1
+# Hawser Agent Setup Wizard 0.1.2
 
 Install Hawser directly as a systemd service inside each Linux LXC that runs Docker. No Compose file is needed. One agent manages the Docker daemon in that LXC, including all its Docker containers. The agent does not manage Proxmox itself.
 
@@ -7,18 +7,17 @@ Install Hawser directly as a systemd service inside each Linux LXC that runs Doc
 Run as root **inside the Docker LXC**, not on your Proxmox node:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/270bfca5cbcdfd9ea6ace7200add40a717bbbbd1/scripts/hawser-agent-setup.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/8d70357b43e1d91eb5a86798f9bc9ed784e424f4/scripts/hawser-agent-setup.sh)"
 ```
 
-This immutable launcher runs version 0.1.1. Requires working Docker, systemd, internet access to GitHub, and an interactive terminal at least 74 columns × 22 rows. On Debian/Ubuntu, missing Python 3 is installed automatically before the menus; aborting afterward does not remove that prerequisite. Other systems must already provide Python 3 with curses and trusted HTTPS certificates.
+This immutable launcher runs version 0.1.2. Requires working Docker, systemd, internet access to GitHub, and an interactive terminal at least 74 columns × 22 rows. On Debian/Ubuntu, missing Python 3 is installed automatically before the menus; aborting afterward does not remove that prerequisite. Other systems must already provide Python 3 with curses and trusted HTTPS certificates.
 
 ## Token and menus
 
 1. Name the LXC/agent, for example `homarr` or `entertainment`.
 2. Paste the token generated in Dockhand's Add Environment window. **The exact same token must be used on both sides.** If your Dockhand version has no Generate button, press **F2 in the wizard's token field** to generate one locally; copy it into Dockhand after installation. Tokens are hidden while you type, never sent to a third party, and excluded from installer logs.
 3. Choose the directory for new agent-managed stacks; `/data/stacks` is the default. This does not import or move existing application directories.
-4. Choose verbose output (default Yes).
-5. Review the configuration and choose **Install**. Back edits earlier entries; Abort exits. Tab/Shift+Tab reaches the field and every button, arrows navigate, and Space/Enter explicitly selects Yes/No before focusing Next. Ctrl+U clears an input field; Backspace deletes its last character.
+4. Review the configuration. The final actions are **Create → Abort → Back**, with **Create highlighted by default**. Press Enter to create/configure the agent. Installation always runs verbosely; there is no verbose prompt. Back edits earlier entries; Abort exits. Tab/Shift+Tab reaches the field and every button, arrows navigate, and Ctrl+U clears an input field; Backspace deletes its last character.
 
 The orange/green menus have centered prompts, visible input fields and mandatory-field validation. The agent name and directory cannot contain spaces. Installation displays progress and a final success checklist.
 
@@ -65,6 +64,6 @@ journalctl -u hawser -n 40 --no-pager
 
 A successful local health check proves the service can reach Docker. Dockhand's **Test connection** additionally checks the route and token from the Dockhand server. A local success cannot verify your firewall or the IP entered in Dockhand.
 
-Validation: Bash syntax and 57 local tests pass, including navigation, required selections, token validation/redaction, checksum rejection, simulated installation, private file permissions and rollback on service failure. Live systemd installation in a user LXC has not yet been tested for this wizard.
+Validation: Bash syntax and 59 local tests pass, including navigation, final action order/default, token validation/redaction, checksum rejection, simulated installation, private file permissions and rollback on service failure. Live systemd installation in a user LXC has not yet been tested for this wizard.
 
 Sources: [Hawser official repository](https://github.com/Finsys/hawser), [Dockhand manual](https://dockhand.pro/manual/).
