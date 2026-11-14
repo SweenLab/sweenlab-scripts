@@ -50,13 +50,13 @@ Validation: 59 safety/UI tests, local terminal open/abort, Python compilation an
 
 # WUD LXC Onboarding
 
-Preview onboarding inside a Docker LXC by passing each project directory containing a `docker-compose.yml`.
+Run inside a Docker LXC as root. The installer discovers running projects, shows the plan, and offers to install.
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/b7de130f75e753703e6a789608027bab825cc49d/scripts/wud-lxc-onboard.sh) /opt/example-one /opt/example-two
+bash <(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/4e708fd0c9d56a0a3124c2ffbe381766a96c48dc/scripts/wud-lxc-onboard.sh)
 ```
 
-Version **0.1.0**. The [setup guide](docs/wud-lxc-onboard.md) covers installation, read-only Tailscale monitoring from CT 103, backups, rollback, notifications, and enabling the daily 9:00 a.m. Eastern updater. [Installer](scripts/wud-lxc-onboard.sh).
+Version **0.2.0**. The [setup guide](docs/wud-lxc-onboard.md) covers installation, read-only Tailscale monitoring from CT 103, backups, rollback, notifications, and enabling the daily 9:00 a.m. Eastern updater. [Installer](scripts/wud-lxc-onboard.sh).
 
 ---
 

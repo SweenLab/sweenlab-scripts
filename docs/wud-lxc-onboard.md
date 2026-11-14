@@ -1,22 +1,22 @@
 # SweenLab WUD LXC onboarding
 
-Version **0.1.0**. Start with a disposable Compose service. The first intended pilot from the handoff is Entertainment (CT 211), after confirming its current project paths. ChaosGremlin CT 103 remains the central WUD dashboard.
+Version **0.2.0**. Start with a disposable Compose service. The first intended pilot from the handoff is Entertainment (CT 211), after confirming its current project paths. ChaosGremlin CT 103 remains the central WUD dashboard.
 
 ## 1. Prepare the Docker LXC
 
 Use a Debian LXC with systemd, Docker Engine on `/var/run/docker.sock`, Docker Compose 2.30 or later, curl, HAProxy, Tailscale and current timezone data. Use a current patched Docker Engine. Join the existing tailnet if needed with `tailscale up` and complete the browser login on the URL it prints. Verify the LXC with `tailscale ip -4`.
 
-Identify each running project's canonical directory. `docker compose ls` shows the Compose files Docker knows about. Use independent projects with one regular `docker-compose.yml` each, deployed from its on-disk path. Review any overrides, generated files, image-variable interpolation, build-only services, or manager-controlled stacks separately before opting them in. Use root-controlled project directories. The updater mounts the selected directories at their original paths with write access so WUD can replace YAML atomically and create `.back` files. It also has full access to the **local** Docker socket.
+The installer reads Compose metadata from running containers on the local Docker socket and deduplicates project directories. It accepts projects deployed from a single regular `docker-compose.yml` and reports skipped overrides and other filenames. Review generated files, interpolated image references, build-only services and manager-controlled stacks before opting services in. Use root-controlled directories. The updater mounts the discovered directories at their original paths with write access for YAML changes and backups, and has full access to the local Docker socket.
 
 ## 2. Preview and install
 
-As root **inside the Docker LXC**, substitute your actual project directories. Run the preview first.
+As root **inside the Docker LXC**, run this one command.
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/b7de130f75e753703e6a789608027bab825cc49d/scripts/wud-lxc-onboard.sh) /opt/example-one /opt/example-two
+bash <(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/4e708fd0c9d56a0a3124c2ffbe381766a96c48dc/scripts/wud-lxc-onboard.sh)
 ```
 
-Add `--install` immediately before the directory arguments to install the local proxy and write the updater configuration. The timer starts disabled. Installation does not change application Compose files or recreate application containers.
+Review the detected projects and press **y** to install the local proxy and write the updater configuration. Outside an interactive terminal the command previews and exits. To limit onboarding to selected projects, you can pass their absolute directories for preview and add `--install` before the paths to install. The timer starts disabled. Installation does not change application Compose files or recreate application containers.
 
 ## 3. Connect CT 103
 
