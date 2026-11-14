@@ -48,6 +48,18 @@ Validation: 59 safety/UI tests, local terminal open/abort, Python compilation an
 
 ---
 
+# WUD LXC Onboarding
+
+Preview onboarding inside a Docker LXC by passing each project directory containing a `docker-compose.yml`.
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/b7de130f75e753703e6a789608027bab825cc49d/scripts/wud-lxc-onboard.sh) /opt/example-one /opt/example-two
+```
+
+Version **0.1.0**. The [setup guide](docs/wud-lxc-onboard.md) covers installation, read-only Tailscale monitoring from CT 103, backups, rollback, notifications, and enabling the daily 9:00 a.m. Eastern updater. [Installer](scripts/wud-lxc-onboard.sh).
+
+---
+
 # Hawser Agent Setup Wizard
 
 Connect Docker LXCs to Dockhand with a guided native-service installer—no Compose file needed. Paste a Dockhand-generated token, or press **F2** to generate one in the wizard. Includes orange/green menus, Back/Abort, automatic verbose installation, checksum verification, backups and a final checklist.
