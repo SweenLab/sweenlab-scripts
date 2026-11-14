@@ -1,3 +1,4 @@
+import os
 import pathlib
 import subprocess
 import tempfile
@@ -57,8 +58,27 @@ class OnboardPlanTest(unittest.TestCase):
         path.symlink_to(self.projects[1] / path.name)
         self.assertNotEqual(self.run_script(self.projects[0]).returncode, 0)
 
-    def test_install_requires_explicit_projects(self):
-        self.assertNotEqual(self.run_script("--install").returncode, 0)
+    def test_discovers_unique_running_single_file_projects(self):
+        docker = self.root / "docker"
+        docker.write_text(
+            '#!/bin/sh\n'
+            'test "$1 $2 $3" = "--host unix:///var/run/docker.sock ps" || exit 1\n'
+            f"printf '%s\\n' '{self.projects[0]}/docker-compose.yml' "
+            f"'{self.projects[0]}/docker-compose.yml' "
+            f"'{self.projects[1]}/docker-compose.yml' "
+            "'/opt/skipped/docker-compose.yml,/opt/skipped/override.yml'\n"
+        )
+        docker.chmod(0o755)
+        result = subprocess.run(
+            ["bash", str(SCRIPT)],
+            env={**os.environ, "PATH": f"{self.root}:{os.environ['PATH']}"},
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for path in self.projects:
+            self.assertEqual(result.stdout.count(f"{path}:{path}"), 1)
+        self.assertIn("Skipping multi-file project", result.stderr)
+        self.assertNotIn("/opt/skipped", result.stdout)
 
 
 if __name__ == "__main__":

@@ -2,16 +2,43 @@
 set -euo pipefail
 umask 077
 
-version=0.1.0
+version=0.2.0
 directory=/etc/sweenlab-wud
 mode=plan
 case ${1:-} in
   --version) echo "$version"; exit ;;
-  --help|'') echo "Usage: wud-lxc-onboard.sh [--install] /absolute/project-dir [...]"; exit ;;
+  --help) echo "Usage: wud-lxc-onboard.sh [--install] [ /absolute/project-dir ... ]"; exit ;;
   --install) mode=install; shift ;;
 esac
 die() { printf '%s\n' "$*" >&2; exit 1; }
-(( $# )) || die 'Supply at least one Compose project directory.'
+discover_projects() {
+  local listing files
+  listing=$(env -u DOCKER_CONTEXT -u DOCKER_HOST docker --host unix:///var/run/docker.sock ps \
+    --filter label=com.docker.compose.project \
+    --format '{{.Label "com.docker.compose.project.config_files"}}') ||
+    die 'Unable to list running Compose projects on the local Docker socket.'
+  while IFS= read -r files; do
+    case "$files" in
+      /etc/sweenlab-wud/*|'') ;;
+      *,*) printf 'Skipping multi-file project: %s\n' "$files" >&2 ;;
+      /*/docker-compose.yml) printf '%s\n' "${files%/docker-compose.yml}" ;;
+      *) printf 'Skipping unsupported Compose file: %s\n' "$files" >&2 ;;
+    esac
+  done <<< "$listing"
+}
+automatic=false
+if (( $# == 0 )); then
+  detected=$(discover_projects | sort -u) || exit 1
+  [[ -n $detected ]] || die 'No running projects with a single docker-compose.yml were found.'
+  discovered=()
+  while IFS= read -r project; do
+    discovered+=("$project")
+  done <<< "$detected"
+  set -- "${discovered[@]}"
+  automatic=true
+  printf 'Discovered Compose project directories:\n'
+  printf '  %s\n' "$@"
+fi
 projects=()
 for project in "$@"; do
   [[ $project =~ ^(/[a-zA-Z0-9_.-]+)+$ ]] || die "Unsupported path: $project"
@@ -125,12 +152,16 @@ Persistent=false
 WantedBy=timers.target
 UNIT
 
-if [[ $mode == plan ]]; then
+if [[ $mode == plan ]] || $automatic; then
   for file in "$stage"/*; do
     printf '\n# %s\n' "${file##*/}"
     cat "$file"
   done
-  exit
+  if ! $automatic || [[ ! -t 0 ]]; then
+    exit
+  fi
+  read -r -p 'Install the local proxy and updater configuration? [y/N] ' answer
+  [[ $answer == y || $answer == Y ]] || exit 0
 fi
 
 (( EUID == 0 )) || die 'Run installation as root inside the Docker LXC.'
