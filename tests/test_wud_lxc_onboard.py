@@ -1,5 +1,6 @@
 import os
 import pathlib
+import pty
 import subprocess
 import tempfile
 import unittest
@@ -79,6 +80,35 @@ class OnboardPlanTest(unittest.TestCase):
             self.assertEqual(result.stdout.count(f"{path}:{path}"), 1)
         self.assertIn("Skipping multi-file project", result.stderr)
         self.assertNotIn("/opt/skipped", result.stdout)
+
+    def test_interactive_wizard_reviews_then_defaults_to_cancel(self):
+        docker = self.root / "docker"
+        docker.write_text(f"#!/bin/sh\necho '{self.projects[0]}/docker-compose.yml'\n")
+        docker.chmod(0o755)
+        calls = self.root / "dialog-calls"
+        whiptail = self.root / "whiptail"
+        whiptail.write_text(
+            '#!/bin/sh\n'
+            f'printf "%s\\n" "$*" >> "{calls}"\n'
+            'case "$*" in *--yesno*) exit 1;; esac\n'
+        )
+        whiptail.chmod(0o755)
+        master, terminal = pty.openpty()
+        try:
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                env={**os.environ, "PATH": f"{self.root}:{os.environ['PATH']}"},
+                stdin=terminal, stderr=terminal, stdout=subprocess.PIPE,
+                timeout=10,
+            )
+        finally:
+            os.close(terminal)
+            os.close(master)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, b"")
+        self.assertIn("--textbox", calls.read_text())
+        self.assertIn("--defaultno --yesno", calls.read_text())
+        self.assertNotIn("--infobox", calls.read_text())
 
 
 if __name__ == "__main__":

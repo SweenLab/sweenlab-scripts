@@ -2,7 +2,7 @@
 set -euo pipefail
 umask 077
 
-version=0.2.0
+version=0.3.0
 directory=/etc/sweenlab-wud
 mode=plan
 case ${1:-} in
@@ -10,7 +10,26 @@ case ${1:-} in
   --help) echo "Usage: wud-lxc-onboard.sh [--install] [ /absolute/project-dir ... ]"; exit ;;
   --install) mode=install; shift ;;
 esac
-die() { printf '%s\n' "$*" >&2; exit 1; }
+ui=
+ui_title='SweenLab WUD Onboarding'
+if (( $# == 0 )) && [[ -t 0 && -t 2 ]]; then
+  if command -v whiptail >/dev/null; then
+    ui=whiptail
+  elif command -v dialog >/dev/null; then
+    ui=dialog
+  else
+    printf 'The wizard requires whiptail or dialog on this LXC.\n' >&2
+    exit 1
+  fi
+fi
+die() {
+  if [[ -n $ui ]]; then
+    "$ui" --title "$ui_title" --msgbox "$*" 12 76 || true
+  else
+    printf '%s\n' "$*" >&2
+  fi
+  exit 1
+}
 discover_projects() {
   local listing files
   listing=$(env -u DOCKER_CONTEXT -u DOCKER_HOST docker --host unix:///var/run/docker.sock ps \
@@ -28,16 +47,25 @@ discover_projects() {
 }
 automatic=false
 if (( $# == 0 )); then
-  detected=$(discover_projects | sort -u) || exit 1
-  [[ -n $detected ]] || die 'No running projects with a single docker-compose.yml were found.'
+  discovery_log=$(mktemp)
+  trap 'rm -f -- "$discovery_log"' EXIT
+  detected=$(discover_projects 2>"$discovery_log" | sort -u) ||
+    die "Compose discovery failed. $(cat "$discovery_log")"
+  skipped=$(cat "$discovery_log")
+  if [[ -z $ui && -n $skipped ]]; then
+    printf '%s\n' "$skipped" >&2
+  fi
+  [[ -n $detected ]] || die "No running projects with a single docker-compose.yml were found. $skipped"
   discovered=()
   while IFS= read -r project; do
     discovered+=("$project")
   done <<< "$detected"
   set -- "${discovered[@]}"
   automatic=true
-  printf 'Discovered Compose project directories:\n'
-  printf '  %s\n' "$@"
+  if [[ -z $ui ]]; then
+    printf 'Discovered Compose project directories:\n'
+    printf '  %s\n' "$@"
+  fi
 fi
 projects=()
 for project in "$@"; do
@@ -57,7 +85,7 @@ for project in "$@"; do
 done
 
 stage=$(mktemp -d)
-trap 'rm -rf -- "$stage"' EXIT
+trap 'rm -rf -- "$stage"; if [[ -n ${discovery_log:-} ]]; then rm -f -- "$discovery_log"; fi' EXIT
 cat > "$stage/docker-compose.yml" <<'YAML'
 services:
   updater:
@@ -152,50 +180,77 @@ Persistent=false
 WantedBy=timers.target
 UNIT
 
-if [[ $mode == plan ]] || $automatic; then
+if [[ -n $ui ]]; then
+  review=$(printf '  %s\n' "${projects[@]}")
+  {
+    printf 'Discovered Compose projects\n\n%s\n' "$review"
+    if [[ -n $skipped ]]; then printf '\n%s\n' "$skipped"; fi
+    printf '\nInstallation adds a local proxy and updater configuration. The daily timer starts disabled.\n'
+  } > "$stage/review.txt"
+  "$ui" --title "$ui_title" --textbox "$stage/review.txt" 20 76 || exit 0
+  "$ui" --title "$ui_title" --defaultno --yesno 'Install the local proxy and updater configuration?' 10 76 || exit 0
+elif [[ $mode == plan ]] || $automatic; then
   for file in "$stage"/*; do
     printf '\n# %s\n' "${file##*/}"
     cat "$file"
   done
-  if ! $automatic || [[ ! -t 0 ]]; then
-    exit
-  fi
-  read -r -p 'Install the local proxy and updater configuration? [y/N] ' answer
-  [[ $answer == y || $answer == Y ]] || exit 0
+  exit
 fi
 
-(( EUID == 0 )) || die 'Run installation as root inside the Docker LXC.'
-for command in curl flock systemctl systemd-analyze tailscale; do
-  command -v "$command" >/dev/null || die "Missing prerequisite: $command"
-done
-[[ -x /usr/sbin/haproxy && -x /usr/bin/docker && -S /var/run/docker.sock ]] ||
-  die 'Install HAProxy and Docker Engine with the standard local socket first.'
-exec 9>/run/sweenlab-wud-install.lock
-flock -n 9 || die 'Another WUD install is active.'
-for target in "$directory" /etc/systemd/system/sweenlab-wud-{proxy.service,update.service,update.timer}; do
-  [[ ! -e $target && ! -L $target ]] || die "Already present: $target. See the guide for recovery."
-done
-tailscale ip -4 >/dev/null || die 'Join Tailscale first (tailscale up).'
-unset DOCKER_CONTEXT DOCKER_HOST
-export DOCKER_HOST=unix:///var/run/docker.sock
-/usr/bin/docker info >/dev/null
-for project in "${projects[@]}"; do
-  /usr/bin/docker compose --project-directory "$project" -f "$project/docker-compose.yml" config --quiet
-done
-/usr/bin/docker compose -f "$stage/docker-compose.yml" config --quiet
-/usr/sbin/haproxy -c -f "$stage/proxy.cfg"
-systemd-analyze calendar '*-*-* 09:00:00 America/New_York' >/dev/null
-/usr/bin/docker compose -f "$stage/docker-compose.yml" pull updater
+install_onboarding() {
+  (( EUID == 0 )) || die 'Run installation as root inside the Docker LXC.'
+  for command in curl flock systemctl systemd-analyze tailscale; do
+    command -v "$command" >/dev/null || die "Missing prerequisite: $command"
+  done
+  [[ -x /usr/sbin/haproxy && -x /usr/bin/docker && -S /var/run/docker.sock ]] ||
+    die 'Install HAProxy and Docker Engine with the standard local socket first.'
+  exec 9>/run/sweenlab-wud-install.lock
+  flock -n 9 || die 'Another WUD install is active.'
+  for target in "$directory" /etc/systemd/system/sweenlab-wud-{proxy.service,update.service,update.timer}; do
+    [[ ! -e $target && ! -L $target ]] || die "Already present: $target. See the guide for recovery."
+  done
+  tailscale ip -4 >/dev/null || die 'Join Tailscale first (tailscale up).'
+  unset DOCKER_CONTEXT DOCKER_HOST
+  export DOCKER_HOST=unix:///var/run/docker.sock
+  /usr/bin/docker info >/dev/null
+  for project in "${projects[@]}"; do
+    /usr/bin/docker compose --project-directory "$project" -f "$project/docker-compose.yml" config --quiet
+  done
+  /usr/bin/docker compose -f "$stage/docker-compose.yml" config --quiet
+  /usr/sbin/haproxy -c -f "$stage/proxy.cfg"
+  systemd-analyze calendar '*-*-* 09:00:00 America/New_York' >/dev/null
+  /usr/bin/docker compose -f "$stage/docker-compose.yml" pull updater
 
-install -d -m 0700 "$directory"
-install -m 0600 "$stage"/{docker-compose.yml,notifications.env,proxy.cfg} "$directory/"
-install -m 0644 "$stage"/sweenlab-wud-* /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable --now sweenlab-wud-proxy.service
-proxy=http://127.0.0.1:23750
-curl --noproxy '*' --max-time 5 -fsS "$proxy/containers/json" >/dev/null
-for probe in 'POST /containers/create' 'GET /images/get' 'GET /containers/000000000000/archive?path=/'; do
-  status=$(curl --noproxy '*' --max-time 5 -sS -o /dev/null -w '%{http_code}' -X "${probe%% *}" "$proxy/${probe#* /}")
-  [[ $status == 403 ]] || die "Expected a proxy denial for $probe, got $status"
-done
-printf '%s\n' 'Local proxy installed and checked. Follow the guide to restrict and enable Serve, test CT 103, and enable the daily timer.'
+  install -d -m 0700 "$directory"
+  install -m 0600 "$stage"/{docker-compose.yml,notifications.env,proxy.cfg} "$directory/"
+  install -m 0644 "$stage"/sweenlab-wud-* /etc/systemd/system/
+  systemctl daemon-reload
+  systemctl enable --now sweenlab-wud-proxy.service
+  proxy=http://127.0.0.1:23750
+  curl --noproxy '*' --max-time 5 -fsS "$proxy/containers/json" >/dev/null
+  for probe in 'POST /containers/create' 'GET /images/get' 'GET /containers/000000000000/archive?path=/'; do
+    status=$(curl --noproxy '*' --max-time 5 -sS -o /dev/null -w '%{http_code}' -X "${probe%% *}" "$proxy/${probe#* /}")
+    [[ $status == 403 ]] || die "Expected a proxy denial for $probe, got $status"
+  done
+
+}
+result='Local proxy installed and checked. Follow the guide to restrict and enable Serve, test CT 103, and enable the daily timer.'
+if [[ -z $ui ]]; then
+  install_onboarding
+  printf '%s\n' "$result"
+  exit
+fi
+
+"$ui" --title "$ui_title" --infobox 'Installing the local proxy and updater configuration…' 8 76 || true
+(
+  ui=
+  set -e
+  install_onboarding
+) > "$stage/install.log" 2>&1 &
+installer_pid=$!
+if wait "$installer_pid"; then
+  "$ui" --title "$ui_title" --msgbox "$result" 12 76 || true
+else
+  "$ui" --title 'Installation stopped — details' --textbox "$stage/install.log" 20 76 || true
+  exit 1
+fi
