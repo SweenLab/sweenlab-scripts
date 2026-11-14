@@ -2,6 +2,12 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/sweenlab-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## WUD LXC Onboarding 0.3.0 — 2026-11-14
+
+- Add a dialog wizard for Compose project review, install confirmation, progress, and results. The confirmation defaults to No.
+- Preserve argument-free discovery and show installation errors in a scrollable dialog.
+- Bash syntax and six onboarding tests pass, including simulated interactive cancellation. Live LXC validation remains pending.
+
 ## WUD LXC Onboarding 0.2.0 — 2026-11-14
 
 - Discover and deduplicate running Compose projects from their Docker labels. The launch command takes no arguments and offers installation after showing the plan.
