@@ -2,7 +2,7 @@
 set -euo pipefail
 umask 077
 
-version=0.3.0
+version=0.3.1
 directory=/etc/sweenlab-wud
 mode=plan
 case ${1:-} in
@@ -185,6 +185,9 @@ if [[ -n $ui ]]; then
   {
     printf 'Discovered Compose projects\n\n%s\n' "$review"
     if [[ -n $skipped ]]; then printf '\n%s\n' "$skipped"; fi
+    if [[ ! -x /usr/sbin/haproxy ]]; then
+      printf '\nHAProxy is missing. Choosing Yes will install it using APT.\n'
+    fi
     printf '\nInstallation adds a local proxy and updater configuration. The daily timer starts disabled.\n'
   } > "$stage/review.txt"
   "$ui" --title "$ui_title" --textbox "$stage/review.txt" 20 76 || exit 0
@@ -202,8 +205,8 @@ install_onboarding() {
   for command in curl flock systemctl systemd-analyze tailscale; do
     command -v "$command" >/dev/null || die "Missing prerequisite: $command"
   done
-  [[ -x /usr/sbin/haproxy && -x /usr/bin/docker && -S /var/run/docker.sock ]] ||
-    die 'Install HAProxy and Docker Engine with the standard local socket first.'
+  [[ -x /usr/bin/docker ]] || die 'Expected the Docker CLI at /usr/bin/docker.'
+  [[ -S /var/run/docker.sock ]] || die 'Docker is unavailable at /var/run/docker.sock.'
   exec 9>/run/sweenlab-wud-install.lock
   flock -n 9 || die 'Another WUD install is active.'
   for target in "$directory" /etc/systemd/system/sweenlab-wud-{proxy.service,update.service,update.timer}; do
@@ -217,8 +220,14 @@ install_onboarding() {
     /usr/bin/docker compose --project-directory "$project" -f "$project/docker-compose.yml" config --quiet
   done
   /usr/bin/docker compose -f "$stage/docker-compose.yml" config --quiet
-  /usr/sbin/haproxy -c -f "$stage/proxy.cfg"
   systemd-analyze calendar '*-*-* 09:00:00 America/New_York' >/dev/null
+  if [[ ! -x /usr/sbin/haproxy ]]; then
+    command -v apt-get >/dev/null || die 'HAProxy is missing and APT is unavailable.'
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get -y --no-remove --no-install-recommends install haproxy
+    [[ -x /usr/sbin/haproxy ]] || die 'APT finished but /usr/sbin/haproxy is unavailable.'
+  fi
+  /usr/sbin/haproxy -c -f "$stage/proxy.cfg"
   /usr/bin/docker compose -f "$stage/docker-compose.yml" pull updater
 
   install -d -m 0700 "$directory"
