@@ -2,30 +2,6 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/sweenlab-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
-## WUD LXC Onboarding 0.3.1 — 2026-11-14
-
-- Detect missing HAProxy during review and install it through APT after confirmation. Reuse an existing HAProxy installation.
-- Report Docker CLI and socket errors separately. Bash syntax and six onboarding tests pass. Live package installation remains unverified.
-
-## WUD LXC Onboarding 0.3.0 — 2026-11-14
-
-- Add a dialog wizard for Compose project review, install confirmation, progress, and results. The confirmation defaults to No.
-- Preserve argument-free discovery and show installation errors in a scrollable dialog.
-- Bash syntax and six onboarding tests pass, including simulated interactive cancellation. Live LXC validation remains pending.
-
-## WUD LXC Onboarding 0.2.0 — 2026-11-14
-
-- Discover and deduplicate running Compose projects from their Docker labels. The launch command takes no arguments and offers installation after showing the plan.
-- Report unsupported Compose filenames and multi-file projects. Retain explicit path support and leave the daily timer disabled at installation.
-- Bash syntax and five local onboarding tests pass, including mocked discovery. Live LXC validation remains pending.
-
-## WUD LXC Onboarding 0.1.0 — 2026-11-14
-
-- Add a one-command preview and installer for independent Compose projects in a Docker LXC.
-- Schedule opt-in WUD Compose updates at 9:00 a.m. America/New_York with YAML backups, health-based rollback, and optional ntfy notifications.
-- Add a loopback Docker metadata proxy and document restricted Tailscale Serve access for CT 103.
-- Document disposable-service validation and recovery. Bash syntax and five local tests pass. Live Docker, Tailscale, and Proxmox validation remain pending.
-
 ## Debian LXC Wizard 0.3.4 — 2026-11-11
 
 - Default the container MTU to 1450 bytes. The wizard still lets you edit it and saves the same selected value for Proxmox, Debian network startup, and the live check before APT.
