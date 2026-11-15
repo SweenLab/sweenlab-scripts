@@ -1,10 +1,10 @@
 # SweenLab WUD LXC onboarding
 
-Version **0.3.0**. Start with a disposable Compose service. The first intended pilot from the handoff is Entertainment (CT 211), after confirming its current project paths. ChaosGremlin CT 103 remains the central WUD dashboard.
+Version **0.3.1**. Start with a disposable Compose service. The first intended pilot from the handoff is Entertainment (CT 211), after confirming its current project paths. ChaosGremlin CT 103 remains the central WUD dashboard.
 
 ## 1. Prepare the Docker LXC
 
-Use a Debian LXC with systemd, Docker Engine on `/var/run/docker.sock`, Docker Compose 2.30 or later, curl, HAProxy, Tailscale, whiptail or dialog, and current timezone data. Use a current patched Docker Engine. Join the existing tailnet if needed with `tailscale up` and complete the browser login on the URL it prints. Verify the LXC with `tailscale ip -4`.
+Use a Debian LXC with systemd, Docker Engine on `/var/run/docker.sock`, Docker Compose 2.30 or later, curl, Tailscale, whiptail or dialog, and current timezone data. Use a current patched Docker Engine. Join the existing tailnet if needed with `tailscale up` and complete the browser login on the URL it prints. Verify the LXC with `tailscale ip -4`.
 
 The installer reads Compose metadata from running containers on the local Docker socket and deduplicates project directories. It accepts projects deployed from a single regular `docker-compose.yml` and reports skipped overrides and other filenames. Review generated files, interpolated image references, build-only services and manager-controlled stacks before opting services in. Use root-controlled directories. The updater mounts the discovered directories at their original paths with write access for YAML changes and backups, and has full access to the local Docker socket.
 
@@ -13,10 +13,10 @@ The installer reads Compose metadata from running containers on the local Docker
 As root **inside the Docker LXC**, run this one command.
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/4eecba2ba3c3d9fc4104ea54c3ba2e3c609ee274/scripts/wud-lxc-onboard.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/71d1044714a7dad2d029f61bc33d95d6e53d2961/scripts/wud-lxc-onboard.sh)
 ```
 
-Review the detected projects, then choose **Yes** in the confirmation dialog to install the local proxy and write the updater configuration. The wizard shows progress and the result in dialog boxes. Outside an interactive terminal the command previews and exits. To limit onboarding to selected projects, you can pass their absolute directories for preview and add `--install` before the paths to install. The timer starts disabled. Installation does not change application Compose files or recreate application containers.
+Review the detected projects, then choose **Yes** in the confirmation dialog to install the local proxy and write the updater configuration. The wizard shows progress and the result in dialog boxes. Outside an interactive terminal the command previews and exits. To limit onboarding to selected projects, you can pass their absolute directories for preview and add `--install` before the paths to install. If HAProxy is missing, the wizard installs it through Debian APT after confirmation. The timer starts disabled. Installation does not change application Compose files or recreate application containers.
 
 ## 3. Connect CT 103
 

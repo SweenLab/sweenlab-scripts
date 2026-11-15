@@ -2,6 +2,11 @@
 
 Each user-visible update is recorded here and on the [GitHub Releases page](https://github.com/SweenLab/sweenlab-scripts/releases). Debian wizard tags use `debian-lxc-vX.Y.Z`; older `v1.x` releases belong to the retired maintenance wizard.
 
+## WUD LXC Onboarding 0.3.1 — 2026-11-14
+
+- Detect missing HAProxy during review and install it through APT after confirmation. Reuse an existing HAProxy installation.
+- Report Docker CLI and socket errors separately. Bash syntax and six onboarding tests pass. Live package installation remains unverified.
+
 ## WUD LXC Onboarding 0.3.0 — 2026-11-14
 
 - Add a dialog wizard for Compose project review, install confirmation, progress, and results. The confirmation defaults to No.

@@ -53,10 +53,10 @@ Validation: 59 safety/UI tests, local terminal open/abort, Python compilation an
 Run inside a Docker LXC as root. The installer discovers running projects, shows the plan in dialog boxes, and offers to install. The wizard requires whiptail or dialog.
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/4eecba2ba3c3d9fc4104ea54c3ba2e3c609ee274/scripts/wud-lxc-onboard.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/SweenLab/sweenlab-scripts/71d1044714a7dad2d029f61bc33d95d6e53d2961/scripts/wud-lxc-onboard.sh)
 ```
 
-Version **0.3.0**. The [setup guide](docs/wud-lxc-onboard.md) covers installation, read-only Tailscale monitoring from CT 103, backups, rollback, notifications, and enabling the daily 9:00 a.m. Eastern updater. [Installer](scripts/wud-lxc-onboard.sh).
+Version **0.3.1**. The [setup guide](docs/wud-lxc-onboard.md) covers installation, read-only Tailscale monitoring from CT 103, backups, rollback, notifications, and enabling the daily 9:00 a.m. Eastern updater. [Installer](scripts/wud-lxc-onboard.sh).
 
 ---
 
