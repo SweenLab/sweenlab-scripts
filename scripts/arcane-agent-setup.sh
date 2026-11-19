@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# SWEENLAB SCRIPTS — Arcane Agent Setup 0.1.0 (MIT)
+# SWEENLAB SCRIPTS — Arcane Agent Setup 0.2.0 (MIT)
 # https://github.com/SweenLab/sweenlab-scripts
 set +x
 set -euo pipefail
 
-readonly version=0.1.0
+readonly version=0.2.0
 readonly install_dir=/opt/arcane-agent
 readonly default_manager=http://10.10.10.103:3552
 
@@ -40,59 +40,78 @@ fi
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-orange='' green='' reset=''
-if [[ ${TERM:-dumb} != dumb && -z ${NO_COLOR:-} ]]; then
-    orange=$'\e[1;38;5;208m'
-    green=$'\e[1;32m'
-    reset=$'\e[0m'
+if ! command -v dialog >/dev/null; then
+    command -v apt-get >/dev/null || die 'The dialog package is required.'
+    printf 'Installing dialog for the SweenLab setup wizard.\n' >&3
+    apt-get update <&3 >&3 2>&3 &&
+        apt-get install -y --no-install-recommends dialog <&3 >&3 2>&3 ||
+        die 'Could not install the dialog package.'
 fi
-heading() { printf '\n%s%s%s\n' "$orange" "$1" "$reset" >&3; }
-prompt() { printf '%s%s%s' "$green" "$1" "$reset" >&3; }
 
-heading "SWEENLAB SCRIPTS | Arcane Agent $version"
+theme=$(mktemp)
+trap 'rm -f -- "$theme"' EXIT
+cat > "$theme" <<'THEME'
+use_colors = ON
+use_shadow = OFF
+screen_color = (WHITE,BLACK,OFF)
+dialog_color = (BLACK,WHITE,OFF)
+title_color = (YELLOW,BLACK,ON)
+border_color = (BLACK,WHITE,OFF)
+button_active_color = (BLACK,GREEN,ON)
+button_inactive_color = (YELLOW,BLACK,ON)
+button_key_active_color = (BLACK,GREEN,ON)
+button_key_inactive_color = (YELLOW,BLACK,ON)
+button_label_active_color = (BLACK,GREEN,ON)
+button_label_inactive_color = (YELLOW,BLACK,ON)
+inputbox_color = (BLACK,WHITE,OFF)
+THEME
+
+box() {
+    # Keep the screen and keyboard on the terminal, with answers on a private pipe.
+    DIALOGRC="$theme" DIALOGOPTS='' dialog --output-fd 4 \
+        --backtitle "SWEENLAB SCRIPTS | Arcane Agent $version" "$@" \
+        4>&1 <&3 >&3 2>&3
+}
+
 manager=$default_manager
 unset enrollment_token
 while true; do
-    heading 'Manager'
-    prompt "Manager URL [$manager] (or type Abort) "
-    IFS= read -r answer <&3 || die 'Setup cancelled.'
-    case $answer in [Aa]bort) exit 0 ;; esac
-    manager=${answer:-$manager}
+    if ! answer=$(box --title 'Manager' --ok-label Next --cancel-label Abort \
+        --inputbox 'Enter the Arcane Manager URL.' 9 64 "$manager"); then
+        exit 0
+    fi
+    manager=${answer:-$default_manager}
     if [[ ! $manager =~ ^https?://([A-Za-z0-9.-]+|\[[0-9A-Fa-f:]+\])(:[0-9]{1,5})?(/[A-Za-z0-9._~/%-]*)?$ ]]; then
-        printf 'Enter an HTTP or HTTPS manager URL.\n' >&3
+        box --title 'Manager URL' --msgbox 'Enter an HTTP or HTTPS manager URL.' 7 60
         manager=$default_manager
         continue
     fi
 
-    heading 'Enrollment'
-    printf 'In Arcane, open Agents > Add Agent and generate a token for this LXC.\n' >&3
-    printf 'Press Enter to go back. Press Ctrl+C to abort.\n' >&3
     while true; do
-        prompt 'Paste enrollment token (hidden) '
-        if ! IFS= read -rs enrollment_token <&3; then
-            printf '\n' >&3
-            die 'Setup cancelled.'
+        if enrollment_token=$(box --title 'Enrollment' --ok-label Next --cancel-label Back \
+            --insecure --passwordbox \
+            'Paste the per-agent token from Arcane > Agents > Add Agent. The field displays asterisks as you paste.' 10 64); then
+            if [[ $enrollment_token =~ ^arc_etkn_[A-Za-z0-9_-]+$ ]]; then
+                break
+            fi
+            unset enrollment_token
+            box --title 'Enrollment token' --msgbox 'Paste a token beginning with arc_etkn_.' 7 60
+        else
+            selection=$?
+            [[ $selection == 1 ]] && continue 2
+            exit 0
         fi
-        printf '\n' >&3
-        [[ -n $enrollment_token ]] || break
-        if [[ $enrollment_token =~ ^arc_etkn_[A-Za-z0-9_-]+$ ]]; then
-            break
-        fi
-        printf 'Expected an enrollment token starting with arc_etkn_.\n' >&3
     done
-    [[ -n $enrollment_token ]] || continue
 
-    heading 'Review'
-    printf '  Manager     %s\n  Compose     %s/docker-compose.yml\n' "$manager" "$install_dir" >&3
-    while true; do
-        prompt '[Install / Back / Abort] (default Abort) '
-        IFS= read -r answer <&3 || die 'Setup cancelled.'
-        case $answer in
-            [Ii]nstall|[Ii]) break 2 ;;
-            [Bb]ack|[Bb]) unset enrollment_token; break ;;
-            [Aa]bort|[Aa]|'') exit 0 ;;
-        esac
-    done
+    if box --title 'Review' --yes-label Install --no-label Abort --defaultno \
+        --extra-button --extra-label Back --yesno \
+        "Manager: $manager\nCompose: $install_dir/docker-compose.yml\n\nStart the Arcane Agent with Docker Compose?" 11 68; then
+        break
+    else
+        selection=$?
+        unset enrollment_token
+        [[ $selection == 3 ]] || exit 0
+    fi
 done
 
 # mkdir is the claim on this path. An existing directory or symlink makes it fail.
@@ -122,9 +141,11 @@ volumes:
   arcane-data:
 EOF
 
-heading 'Starting Arcane Agent'
+box --title 'Starting Arcane Agent' --infobox 'Docker Compose is starting the agent.' 6 58
 if ! docker_local compose --project-name arcane-agent --file docker-compose.yml up -d; then
-    die "Startup failed. Configuration is saved. To retry, run cd $install_dir && docker compose -p arcane-agent -f docker-compose.yml up -d"
+    box --title 'Startup failed' --msgbox \
+        "Configuration is saved. To retry, run:\n\ncd $install_dir && docker compose up -d" 10 66 || true
+    exit 1
 fi
-heading 'Docker Compose started the agent'
-printf 'Check that the agent shows Online under Agents in %s.\n' "$manager" >&3
+box --title 'Arcane Agent started' --msgbox \
+    "Check that the agent shows Online under Agents in $manager." 8 64 || true
